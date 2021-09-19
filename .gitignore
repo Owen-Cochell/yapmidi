@@ -1,0 +1,37 @@
+# Gitignore File
+
+# IntelliJ project files
+.idea
+*.iml
+out
+gen
+
+# Python Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Python Files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python distribution archive directory/PyInstaller spec files
+
+dist/
+build/
+*.spec
+*.egg-info
+
+# VSCode files:
+
+.vscode/
+
+# Sphinx build files
+
+docs/build/
+docs/source/_build
