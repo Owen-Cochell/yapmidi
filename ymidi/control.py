@@ -43,4 +43,5 @@ class Controller:
 
     def __init__(self) -> None:
         
-        self._control = []  # List contaning controller numbers
+        self._meta_control = []  # List contaning controller values and LSB mappings
+        self.control = []  # List containing controllers and their values
