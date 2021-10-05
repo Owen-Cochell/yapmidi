@@ -8,15 +8,15 @@ as well as handlers that can be used in this class.
 
 import asyncio
 
-from typing import Union
+from ymidi.handlers.base import BaseHandler, HandlerCollection
+from ymidi.io.base import IOCollection
 
 
-class YMSequencer(ModuleCollection):
+class YMSequencer(HandlerCollection):
     """
     YMSequencer - High-level yap-midi class!
 
-    The sequencer is the top-level class for yap-midi
-    development.
+    The sequencer is the top-level class for yap-midi development.
     It coordinates and synchronizes input IO modules,
     event handlers, and output IO modules.
 
@@ -48,7 +48,7 @@ class YMSequencer(ModuleCollection):
     Input IO modules -> Meta Handlers +
                                       +--> Output IO modules
 
-    As you can see, 
+    As you can see,
     the event lifecycle is linear until the meta handlers 
     finish processing the event.
     From there, the finalized event is passed along
@@ -60,14 +60,10 @@ class YMSequencer(ModuleCollection):
 
     def __init__(self) -> None:
 
-        super().__init__(event_loop=asyncio.get_event_loop(), module_type=BaseHandler)
+        super().__init__(event_loop=asyncio.get_event_loop())
 
-        self.event_map = {}  # Dictionary mapping events to handlers
-        self._input = IOCollection()  # IO Collection for input
-        self._output = IOCollection()  # IO Collection for output
-
-        self.event_map = {}  # Mapping event types to handlers
-        self.meta_hand = ()  # Tuple of meta handlers
+        self.input = IOCollection(event_loop=self.event_loop)  # IO Collection for input
+        self.output = IOCollection(event_loop=self.event_loop)  # IO Collection for output
 
     def get_input(self) -> IOCollection:
         """
@@ -80,7 +76,7 @@ class YMSequencer(ModuleCollection):
         :rtype: IOCollection
         """
 
-        return self._input
+        return self.input
 
     def get_output(self) -> IOCollection:
         """
@@ -93,4 +89,40 @@ class YMSequencer(ModuleCollection):
         :rtype: IOCollection
         """
 
-        return self._output
+        return self.output
+
+    async def run(self):
+        """
+        Runs the sequencer and all components.
+
+        In this method we get events from the input IOCollection,
+        route them though the meta handlers,
+        and 'concurrently' send the output event to the event handlers and the output IOCollection.
+
+        This is where the magic happens!
+        All components are utilized here,
+        and this method of the Sequencer
+        is how MIDI processing gets done.
+        """
+
+        # Loop until we stop:
+
+        while self.running:
+
+            # Get an event from the Input IO Modules:
+
+            event = await self.input.get()
+
+            # Send the event though the meta handlers:
+
+            event = await self.meta_handle(event)
+
+            if event is None:
+
+                # Dropping the event, let's exit:
+
+                return
+
+            # Send the event to the output modules and event handlers:
+
+            final = asyncio.gather(self.event_handle(event), self.output.put(event))

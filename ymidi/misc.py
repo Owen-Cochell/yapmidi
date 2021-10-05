@@ -179,8 +179,8 @@ class ModuleCollection(object):
         # Module storage component
         self.modules = ()
         # Event loop in use. if not provided, then one will be created
-        self.event_loop: asyncio.AbstractEventLoop = event_loop if event_loop is None else asyncio.get_event_loop()
-        self.run_task: asyncio.Task  # Task running this collection's run() method
+        self.event_loop: asyncio.AbstractEventLoop = event_loop if event_loop is not None else asyncio.get_event_loop()
+        self.start_tasks = []  # Module start tasks
 
         self.module_type = object if module_type is None else module_type  # Module type to use, superclass if not specified
         self.running = False  # Value determining if we are running
@@ -195,6 +195,12 @@ class ModuleCollection(object):
         and that no exceptions are encountered.
         If we do encounter an exception,
         then we will not load this module!
+
+        We also schedule this handler to be started at a later date via tasks.
+        Once this collection is started,
+        then all event handlers will have their start() methods called.
+        This occurs even while the event loop is running,
+        allowing handlers to be added during runtime.
 
         We also return the instance of the module we loaded.
 
@@ -231,6 +237,10 @@ class ModuleCollection(object):
         # Add the module to our collection:
 
         self._load_module(module)
+
+        # Schedule the module's start() method:
+
+        self.start_tasks.append(self.event_loop.create_task(self.run_module(module)))
 
         # Finally, return the module:
 
@@ -363,6 +373,36 @@ class ModuleCollection(object):
 
         return module
 
+    async def restart_module(self, module: BaseModule) -> BaseModule:
+        """
+        Restarts the given module.
+
+        This is done by calling the start() and stop()
+        methods of the module in question.
+        The module MUST be in a running position to start!
+        We also return the module we restarted.
+
+        If the module fails to start or stop,
+        then the module will be forcefully unloaded!
+
+        :param module: Module to restart
+        :type module: BaseModule
+        :return: The module we restarted
+        :rtype: BaseModule
+        """
+
+        # Stop the module
+
+        await self.stop_module(module)
+
+        # Start the module:
+
+        await self.start_module(module)
+
+        # Return the module in question:
+
+        return module
+
     async def start(self):
         """
         Method used to start this ModuleCollection.
@@ -400,6 +440,24 @@ class ModuleCollection(object):
         # Set our running status:
 
         self.running = False
+
+    async def run_module(self, module: BaseModule):
+        """
+        Runs this module, always will be in a task.
+
+        This is the method that gets scheduled to run
+        when the module is loaded.
+        Usually, this only starts the module and quits.
+        However, the developer can add functionality
+        that works with this module in another way.
+
+        :param module: Module to work with
+        :type module: BaseModule
+        """
+
+        # Just start the module:
+
+        await self.start_module(module)
 
     def _load_module(self, mod: BaseModule):
         """

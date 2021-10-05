@@ -31,7 +31,7 @@ class EventFilter(MetaHandler):
     NAME = "EventFilter"
     PRIORITY = 1
     
-    def handle(self, event: BaseEvent) -> None:
+    async def handle(self, event: BaseEvent) -> None:
         """
         As stated above, we simply return None to drop the event
 

@@ -221,7 +221,7 @@ class IOCollection(ModuleCollection):
 
         # Schedule the module to run as a Task:
 
-        task = self.event_loop.create_task(self._run_module(module))
+        task = self.event_loop.create_task(self.run_module(module))
 
         # Add the task to the task list:
 
@@ -235,7 +235,7 @@ class IOCollection(ModuleCollection):
 
         return module
 
-    async def _run_module(self, module: BaseIO):
+    async def run_module(self, module: BaseIO):
         """
         Runs the given module.
 

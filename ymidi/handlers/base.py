@@ -12,29 +12,12 @@ Builtin handlers are kept elseware.
 
 import asyncio
 
-from typing import Any, Union
+from typing import Any, Union, Callable, Awaitable
 from collections.abc import Iterable
 from collections import defaultdict
 
 from ymidi.misc import ModuleCollection, BaseModule
 from ymidi.events.base import BaseEvent
-
-
-async def run_callback(self, event):
-    """
-    Run function used when running callbacks.
-
-    This function is not intended to be ran on it's own!
-
-    :param self: Instance of the BaseHandler we are apart of
-    :type self: BaseHandler
-    :param events: Event passed to this callback
-    :type events: Any
-    """
-
-    # Run the function with the given args:
-
-    await self._callback(self, event, *self._args)
 
 
 class BaseHandler(BaseModule):
@@ -60,9 +43,9 @@ class BaseHandler(BaseModule):
 
         super().__init__(name=name)
 
-        self._args: list  # Arguments used in callback registration
-        self._callback: function  # Callback to be called
-    
+        self._args: tuple = ()  # Arguments used in callback registration
+        self._callback: Callable[[BaseEvent,], Awaitable]  # Callback to be called
+
     async def handle(self, event: BaseEvent):
         """
         Method called when an event needs to be handled.
@@ -82,6 +65,21 @@ class BaseHandler(BaseModule):
         """
 
         raise NotImplementedError("Handle method should be overloaded in child class!")
+
+    async def _run_function(self, event: BaseEvent):
+        """
+        Runs the external function attached to this handler.
+
+        This method is usually used as the handle method for the handler.
+        The external function MUST be a coroutene!
+
+        :param event: Event to handle
+        :type event: BaseEvent
+        """
+
+        # Run the external function:
+
+        await self._callback(event, *self._args)
 
 
 class MetaHandler(BaseHandler):
@@ -312,7 +310,7 @@ class HandlerCollection(ModuleCollection):
 
         return meta
 
-    def callback(self, func: function, event: Union[bytes, Iterable], name:str='', args:list=None):
+    def callback(self, func: Callable[[BaseEvent,], Awaitable], event: Union[bytes, Iterable], name:str='', args:list=None):
         """
         Adds the given function to the HandlerCollection as a callback.
         The function provided MUST be an asyncio coroutene!
@@ -374,7 +372,7 @@ class HandlerCollection(ModuleCollection):
 
         if args is not None:
 
-            temp._args = args
+            temp._args = tuple(args)
 
         # Set the function:
 
@@ -382,11 +380,26 @@ class HandlerCollection(ModuleCollection):
 
         # Set the callback runner:
 
-        temp.handle = run_callback
+        temp.handle = temp._run_function
 
         # Register the handler with the given events:
 
         self.load_handler(temp, event)
+
+    def sync_submit(self, event: BaseEvent):
+        """
+        Synchronously sends the event thorugh the handlers.
+
+        This code is intended to be ran by synchronous code
+        that needs to handle a given event.
+
+        We simply call the underlying submit() method.
+
+        :param event: Event to handle
+        :type event: BaseEvent
+        """
+
+        self.event_loop.run_until_complete(self.submit(event))
 
     async def submit(self, event: BaseEvent):
         """
@@ -408,11 +421,41 @@ class HandlerCollection(ModuleCollection):
         :type event: BaseEvent
         """
 
+        temp = await self.meta_handle(event)
+
+        if temp is None:
+
+            # Invalid event! Let's do nothing:
+
+            return
+
+        event = temp
+
+        # Run the event though the event handlers:
+
+        await self.event_handle(event)
+
+    async def meta_handle(self, event: BaseEvent) -> Union[BaseEvent, None]:
+        """
+        Sends the given event thorugh this collection's meta handlers.
+
+        This method will send in event through all meta handlers
+        in order of priority and return the end result.
+
+        If a packet is dropped,
+        then we will simply return None.
+
+        We only run the relevant meta handlers for this event.
+
+        :param event: Event to be handled
+        :type event: BaseEvent
+        :return: Final event, or None
+        :rtype: BaseEvent, None
+        """
+
         # Get a list of MetaHandlers:
 
         meta = self.meta_map[None] + self.meta_map[event.statusmsg]
-
-        # Run the Metahandlers in order:
 
         for hand in meta:
 
@@ -426,7 +469,27 @@ class HandlerCollection(ModuleCollection):
 
                 # Invalid event! Return without processing
 
-                return
+                return None
+
+        return event
+
+    async def event_handle(self, event: BaseEvent):
+        """
+        Sends the event through all event handlers.
+
+        This method will NOT send the event through the meta handlers,
+        so be sure to call the meta_handle() method to do so(good),
+        or the submit() method which does this operation for you(best).
+
+        We run each event handler in an asyncio task for 'concurency'.
+        Event handlers should not alter the state of this collection,
+        so it is safe to run them at the same time.
+
+        We only run the relevant event handlers attached to this event.
+
+        :param event: Event to handle
+        :type event: BaseEvent
+        """
 
         # Now that the event is processed, let's get the relevant EventHandlers:
 
