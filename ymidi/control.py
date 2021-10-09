@@ -9,7 +9,7 @@ from types import MappingProxyType
 from ymidi.constants import MAX_INT_VALUE
 
 
-class Controller(UserList):
+class Controller(list):
     """
     Controller - Class for all controller actions!
 
@@ -65,11 +65,40 @@ class Controller(UserList):
     as well as converting controllers into their high-resolution counterparts.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, num=120):
         
-        self._control = []  # List contaning controller values and LSB mappings
+        super(list).__init__()
 
-    def set_controller(self, num: int, val: int, reset=False):
+        self._control = []  # List contaning controller values and LSB mappings
+        self.num = num  # Number of controllers
+
+        self.reset()
+
+    def reset(self):
+        """
+        Initializes the controller.
+
+        It configures the internal controller structure
+        and prepares this object for operation.
+        This zeros out the controllers as well.
+
+        Users can use this method to reset the controllers
+        back to a stable state.
+        """
+
+        # CLear out the controller list:
+
+        self.clear()
+        self._control.clear()
+
+        # Setup the structure:
+
+        for num in range(0, self.num):
+
+            self.append(0)
+            self._control.append([0, [], []])
+
+    def set_controller(self, num: int, val: int, reset=True):
         """
         Sets the controller at the given number with the given value.
 
@@ -109,7 +138,8 @@ class Controller(UserList):
 
                 # Set their value to zero:
 
-                super(UserList).__setitem__(sub, 0)
+                super().__setitem__(sub, 0)
+                self._control[sub][0] = 0
 
         # Re-compute our value:
 
@@ -268,18 +298,49 @@ class Controller(UserList):
 
         # Compute the high-level value in accordance with mappings:
 
-        val = 0
+        val = self._control[master][0]
 
-        # Compute the first value:
+        if self._control[master][1]:
 
-        val += self._control[self._control[master][1][0]][0]
+            print("Computing sub-values")
 
-        for index, map in enumerate(self._control[master][1], 1):
+            val = 0
 
-            # Calculate the value:
+            # Compute the first value:
 
-            val += self._control[map][0] * MAX_INT_VALUE * index
+            #val += self._control[self._control[master][1][0]][0]
+
+            print("Value after first: {}".format(val))
+
+            for index, map in enumerate(self._control[master][1]):
+
+                # Calculate the value:
+
+                val += self._control[map][0] * (MAX_INT_VALUE ** index)
+
+                print("New value{}: {}".format(map, val))
+
+            # Calculate the final value:
+
+            val += self._control[master][0] * (MAX_INT_VALUE ** (len(self._control[master][1])))
+
+            print("Raw value: {}".format(self._control[master][0]))
+            print("Final val: {}".format(val))
 
         # Finally, set the value:
 
-        super(UserList).__setitem__(master, val)
+        super().__setitem__(master, val)
+
+    def __setitem__(self, num: int, val: int):
+        """
+        Emulates a list-like object.
+
+        We simply call set_controller() under the hood.
+
+        :param num: Controller number to alter
+        :type num: int
+        :param val: Value to set the controller to
+        :type val: int
+        """
+
+        self.set_controller(num, val)
