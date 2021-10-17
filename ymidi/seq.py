@@ -49,13 +49,13 @@ class YMSequencer(HandlerCollection):
                                       +--> Output IO modules
 
     As you can see,
-    the event lifecycle is linear until the meta handlers 
+    the event lifecycle is linear until the meta handlers
     finish processing the event.
     From there, the finalized event is passed along
     to the event handlers for processing,
     and the output IO modules for sending them elseware.
 
-    We synchronize the asyncio event loop across all components.  
+    We synchronize the asyncio event loop across all components.
     """
 
     def __init__(self) -> None:

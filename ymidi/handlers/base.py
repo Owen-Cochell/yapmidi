@@ -156,7 +156,7 @@ class HandlerCollection(ModuleCollection):
     We offer some easy entry points into handler management,
     mainly indexing and organising handlers so they are tied
     to certain events.
-    We also offer the meta handler framework, 
+    We also offer the meta handler framework,
     which allows meta handlers to alter(or drop)
     events before they reach the event handlers.
 

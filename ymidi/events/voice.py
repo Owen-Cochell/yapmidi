@@ -158,4 +158,3 @@ class ControlChange(ChannelVoiceMessage):
 
         self.control = control  # Control number
         self.value = value  # Value number
-

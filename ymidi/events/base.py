@@ -51,7 +51,7 @@ class ChannelMessage(BaseEvent):
 
     __slots__ = ['channel']
 
-    def __init__(self, channel=None) -> None:
+    def __init__(self, channel) -> None:
         super().__init__()
 
         self.channel = channel

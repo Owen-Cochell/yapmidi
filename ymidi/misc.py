@@ -523,4 +523,3 @@ class ModuleCollection(object):
         # Remove ourselves from the module:
 
         mod.collection = None
-

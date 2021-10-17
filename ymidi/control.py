@@ -3,9 +3,6 @@ This class contains components for representing
 and working with MIDI controllers.
 """
 
-from collections import UserList
-from types import MappingProxyType
-
 from ymidi.constants import MAX_INT_VALUE
 
 
