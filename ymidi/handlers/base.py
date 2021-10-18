@@ -1,9 +1,9 @@
 """
 This file contains base components for yap-midi handlers.
 
-An event handler is a piece of code that 
+An event handler is a piece of code that
 reacts to a certain MIDI event.
-A HandlerCollection is a class 
+A HandlerCollection is a class
 that organizes and works with handlers.
 
 This file ONLY contains the BaseHandler, MetaHandler, and HandlerCollection classes.
@@ -12,7 +12,7 @@ Builtin handlers are kept elseware.
 
 import asyncio
 
-from typing import Any, Union, Callable, Awaitable
+from typing import Any, Union, Callable, Awaitable, List
 from collections.abc import Iterable
 from collections import defaultdict
 
@@ -163,6 +163,15 @@ class HandlerCollection(ModuleCollection):
     We also offer methods to register handlers
     using decorators,
     so users don't have to write an entirely new class for handler management.
+
+    We also offer temporary maps that an event will resolve to.
+    This allows meta-handlers to map specific event instances
+    to certain callbacks.
+    Temporary maps are NOT identifying events by type,
+    but are instead used to identify events by instance.
+    For example,
+    an event can be attached to other callbacks based upon it's parameter.
+    TODO: Fix this description and 
     """
 
     GLOBAL_EVENT = 'global'  # Global event type
@@ -173,6 +182,8 @@ class HandlerCollection(ModuleCollection):
 
         self.meta_map = defaultdict(list) # Tuple of meta events, in order of priority
         self.handler_map = defaultdict(list)  # Dictionary mapping events to handlers
+        self.alt_maps = defaultdict(list)  # Temporary maps for events
+
         self.tasks = []  # List of currently running tasks
 
     def load_handler(self, hand: BaseHandler, event: Union[bytes, Iterable, str]) -> BaseHandler:
@@ -309,6 +320,26 @@ class HandlerCollection(ModuleCollection):
         # Finally, return the MetaHandler:
 
         return meta
+
+    def load_temp(self, event: BaseEvent, key: Union[bytes, Iterable, str]):
+        """
+        Registers this event instance to the given handlers under the key.
+
+        These handlers under the key will be ran when the given event instance is encountered.
+        Our understanding of the event mapping will be cleared when the event is handled.
+
+        This method will mostly be used by MetaHandler to map events to handlers that are
+        not identifiable by status message, and instead by their parameters.
+
+        :param event: Event to map
+        :type event: BaseEvent
+        :param key: Keys to retrieve 
+        :type key: Union[bytes, Iterable, str]
+        """
+
+        # Map the event:
+
+        self.alt_maps[event] = self.event_handle[key]
 
     def callback(self, func: Callable[[BaseEvent,], Awaitable], event: Union[bytes, Iterable], name:str='', args:list=None):
         """
@@ -493,11 +524,15 @@ class HandlerCollection(ModuleCollection):
 
         # Now that the event is processed, let's get the relevant EventHandlers:
 
-        hands = self.handler_map[None] + self.meta_map[event.statusmsg]
+        hands = self.handler_map[None] + self.handler_map[event.statusmsg] + self.alt_maps[event]
 
         # Process the events!
 
         final = await asyncio.gather(*hands)
+
+        # Clear the temp maps
+
+        del self.alt_maps[event]
 
     def _get_priority(self, val: MetaHandler) -> int:
         """
