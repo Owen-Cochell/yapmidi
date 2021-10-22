@@ -10,9 +10,11 @@ This file ONLY contains the BaseHandler, MetaHandler, and HandlerCollection clas
 Builtin handlers are kept elseware.
 """
 
+from __future__ import annotations
+
 import asyncio
 
-from typing import Any, Union, Callable, Awaitable, List
+from typing import Any, Union, Callable, Awaitable
 from collections.abc import Iterable
 from collections import defaultdict
 
@@ -35,9 +37,12 @@ class BaseHandler(BaseModule):
     These modules also support self-reporting event registration,
     meaning that the handler tells the HandlerCollection
     what events this handler is supposed to work with.
+    Developers can simply define the 'KEYS" global attribute
+    with a tuple of events they wish to be attached to.
     """
 
     NAME = "BaseHandler"
+    KEYS = ()  # A tuple of events this handler should be attached to
 
     def __init__(self, name: str=''):
 
@@ -45,6 +50,7 @@ class BaseHandler(BaseModule):
 
         self._args: tuple = ()  # Arguments used in callback registration
         self._callback: Callable[[BaseEvent,], Awaitable]  # Callback to be called
+        self.collection: HandlerCollection
 
     async def handle(self, event: BaseEvent):
         """
@@ -96,14 +102,12 @@ class MetaHandler(BaseHandler):
     Meta-handlers are very useful tools,
     and they can automate certain actions that 
     the user might not want to deal with themselves.
+    The altered events will be sent to event handlers and output modules,
+    so it's important to be careful what meta handlers you load!
 
     Meta handlers can be removed or disabled from the HandlerCollection,
     but be aware that doing so could lead to strange experiences
     that might not be encountered with working meta handlers!
-
-    Meta handlers can alter events on their way to the event handlers,
-    as well as packets on their way to the output modules.
-    It is up to the user to decide which streams the meta handlers effect.
 
     Meta Handlers also have a built in priority that determines the order of execution.
     This value may get changed by the user loading the handler,
@@ -111,6 +115,10 @@ class MetaHandler(BaseHandler):
     but it is still important to put s good default priority
     that the user may want.
     The lower the number, the higher the priority.
+
+    Like the BaseHandler, we offer the 'KEYS' global variable
+    that allows meta handlers to be attached to events automatically,
+    without the developer having to define them.
     """
 
     NAME = "MetaHandler"
@@ -121,6 +129,7 @@ class MetaHandler(BaseHandler):
         super().__init__(name=name)
 
         self.priority=self.PRIORITY if priority is None else priority # Priority of this meta handler
+        self.collection: HandlerCollection
 
     async def handle(self, event: BaseEvent) -> Union[BaseEvent, None]:
         """
@@ -186,7 +195,7 @@ class HandlerCollection(ModuleCollection):
 
         self.tasks = []  # List of currently running tasks
 
-    def load_handler(self, hand: BaseHandler, event: Union[bytes, Iterable, str]) -> BaseHandler:
+    def load_handler(self, hand: BaseHandler, event: Union[bytes, Iterable, str], default: bool=True) -> BaseHandler:
         """
         Loads an event handler and registers it to the given event(s).
 
@@ -202,13 +211,19 @@ class HandlerCollection(ModuleCollection):
         meaning that this module will be properly loaded into the collection.
         All we do is define some mappings!
 
+        By default, we load the default events this meta handler wishes to be attached to
+        in addition to the ones specified by the user.
+        This feature can be disabled by passing 'True' to the 'default' parameter.
+
         :param hand: Handler to add to the collection
         :type hand: BaseHandler
         :param event: Event(s) to map the handler to
         :type event: bytes, iterable, None
+        :param default: Boolean determining if we should load default events from the event handler
+        :type default: bool
         """
 
-        # Load the event - Make sure it succeeds!
+        # Load the handler - Make sure it succeeds!
 
         super().load_module(hand)
 
@@ -216,11 +231,17 @@ class HandlerCollection(ModuleCollection):
 
         self._add_event(self.handler_map, event, hand)
 
+        # Load default mappings, if applicable:
+
+        if default:
+
+            self._add_event(self.meta_map, hand.KEYS, hand)
+
         # Finally, return the handler:
 
         return hand
 
-    def load_meta(self, meta: MetaHandler, event: Any, priority: int=None) -> MetaHandler:
+    def load_meta(self, meta: MetaHandler, event: Any, priority: int=None, default: bool=True) -> MetaHandler:
         """
         Loads the meta handler into our collection.
 
@@ -239,10 +260,16 @@ class HandlerCollection(ModuleCollection):
         The lower the number, the higher the parameter.
         Leave this value as None to use the default priority value for the handler.
 
+        By default, we load the default events this meta handler wishes to be attached to
+        in addition to the ones specified by the user.
+        This feature can be disabled by passing 'True' to the 'default' parameter.
+
         :param meta: Meta handler to load
         :type meta: MetaHandler
         :param priority: Priority of the handler, optional
         :type priority: int, None, Iterable
+        :param default: Boolean determining if we should load default events from the meta handler
+        :type default: bool
         :return: Loaded MetaHandler
         :rtype: MetaHandler
         """
@@ -260,6 +287,12 @@ class HandlerCollection(ModuleCollection):
         # Add the MetaHandler to our mappings:
 
         self._add_event(self.meta_map, event, meta)
+
+        # Load default mappings, if applicable:
+
+        if default:
+
+            self._add_event(self.meta_map, meta.KEYS, meta)
 
         # Finally, return the MetaHandler:
 
@@ -321,7 +354,7 @@ class HandlerCollection(ModuleCollection):
 
         return meta
 
-    def load_temp(self, event: BaseEvent, key: Union[bytes, Iterable, str]):
+    def map_temp(self, event: BaseEvent, key: Union[bytes, Iterable, str]):
         """
         Registers this event instance to the given handlers under the key.
 
@@ -335,13 +368,14 @@ class HandlerCollection(ModuleCollection):
         :type event: BaseEvent
         :param key: Keys to retrieve 
         :type key: Union[bytes, Iterable, str]
+        :param ignore_map: Boolean determining if we should ignore original mappings
         """
 
-        # Map the event:
+        # Add the temporary handler map:
 
-        self.alt_maps[event] = self.event_handle[key]
+        self.alt_maps[event] = self.alt_maps[event] + self.handler_map[key]
 
-    def callback(self, func: Callable[[BaseEvent,], Awaitable], event: Union[bytes, Iterable], name:str='', args:list=None):
+    def callback(self, func: Callable[[HandlerCollection, BaseEvent,], Awaitable], event: Union[bytes, Iterable], name:str='', args:list=None):
         """
         Adds the given function to the HandlerCollection as a callback.
         The function provided MUST be an asyncio coroutene!
@@ -524,7 +558,7 @@ class HandlerCollection(ModuleCollection):
 
         # Now that the event is processed, let's get the relevant EventHandlers:
 
-        hands = self.handler_map[None] + self.handler_map[event.statusmsg] + self.alt_maps[event]
+        hands = self.handler_map[None] + self.alt_maps[event] if self.alt_maps[event] else self.handler_map
 
         # Process the events!
 

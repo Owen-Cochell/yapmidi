@@ -12,7 +12,7 @@ If you are a user you probably don't want to work with most of these!
 """
 
 import asyncio
-from asyncio import events
+from typing import Tuple
 
 from ymidi.protocol import BaseProtocol
 from ymidi.decoder import BaseDecoder
@@ -141,7 +141,9 @@ class IOCollection(ModuleCollection):
         self.queue = asyncio.queues.Queue()  # Output queue that holds events
 
         self.tasks = ()  # Tuple mapping modules to tasks
-    
+
+        self.modules: Tuple[BaseIO,...] = ()
+
     async def get(self) -> BaseEvent:
         """
         Gets an event from our queue.

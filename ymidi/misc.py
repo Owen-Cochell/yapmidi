@@ -9,6 +9,20 @@ from typing import Any
 from ymidi.errors import ModuleLoadException,  ModuleStartException, ModuleStopException, ModuleUnloadException
 
 
+class EventCollection:
+    """
+    A collection of events.
+
+    This class is used mostly by the ModularDecoder.
+    It is responsable for keeping a collection of relevant
+    event that will be encountered when encoding or decoding.
+    It is also used to organise events by types,
+    which allows the ModularDecoder to treat the events in a meaningful way.
+
+    We are essentially a dictionary that tells the ModularDecoder
+    how to decode information.
+    """
+
 class BaseModule(object):
     """
     BaseModule - Class all yap-midi modules MUST inherit!

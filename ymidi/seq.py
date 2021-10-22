@@ -7,8 +7,9 @@ as well as handlers that can be used in this class.
 """
 
 import asyncio
+from ymidi.events.base import BaseEvent
 
-from ymidi.handlers.base import BaseHandler, HandlerCollection
+from ymidi.handlers.base import HandlerCollection
 from ymidi.io.base import IOCollection
 
 
@@ -44,16 +45,15 @@ class YMSequencer(HandlerCollection):
 
     The event lifecycle looks something like this:
 
-                                      +--> Event Handlers
-    Input IO modules -> Meta Handlers +
-                                      +--> Output IO modules
+                                  +--> Meta Handlers --> Event Handlers
+    Input IO modules -> Sequencer +
+                                  +--> Meta Handlers --> Output IO Modules
 
     As you can see,
-    the event lifecycle is linear until the meta handlers
-    finish processing the event.
-    From there, the finalized event is passed along
-    to the event handlers for processing,
-    and the output IO modules for sending them elseware.
+    we retrieve an event from the input IO modules,
+    and then concurrently send it through the relevant meta handlers for each path.
+    The meta handlers from the event handlers and the output IO modules are diffrent,
+    which allows events to be altered depending upon where it is going.
 
     We synchronize the asyncio event loop across all components.
     """
@@ -64,6 +64,15 @@ class YMSequencer(HandlerCollection):
 
         self.input = IOCollection(event_loop=self.event_loop)  # IO Collection for input
         self.output = IOCollection(event_loop=self.event_loop)  # IO Collection for output
+        self.output_meta = HandlerCollection()  # Output meta handlers
+
+        # Setting the default handler to output to the output IO modules:
+
+        self.output_meta.callback(self._output_event, HandlerCollection.GLOBAL_EVENT, name="IOModule Output")
+
+        # Submit the run task:
+
+        self.event_loop.create_task(self.run())
 
     def get_input(self) -> IOCollection:
         """
@@ -113,16 +122,33 @@ class YMSequencer(HandlerCollection):
 
             event = await self.input.get()
 
-            # Send the event though the meta handlers:
+            # Send the event through our event handlers and the output modules:
 
-            event = await self.meta_handle(event)
+            final = await asyncio.gather(self.submit(event), self.output_meta.submit(event))
 
-            if event is None:
+    async def _process_output(self, event: BaseEvent):
+        """
+        Sends the given event through the output meta handlers,
+        as submits it to the output IOCollection.
 
-                # Dropping the event, let's exit:
+        :param event: Event to process
+        :type event: BaseEvent
+        """
 
-                return
+        # Process the event:
 
-            # Send the event to the output modules and event handlers:
+        await self.output_meta.submit(event)
 
-            final = asyncio.gather(self.event_handle(event), self.output.put(event))
+    async def _output_event(self, hand: HandlerCollection, event: BaseEvent):
+        """
+        Outputs the given event to the output IO modules.
+
+        :param hand: Instance of us
+        :type hand: HandlerCollection
+        :param event: Event to output
+        :type event: BaseEvent
+        """
+
+        # Output the event:
+
+        await self.output.put(event)

@@ -26,8 +26,8 @@ class BaseEvent(object):
 
     __slots__ = ["tick", "data", "raw"]
     name = "Base MIDI Event"
-    length = 0
-    statusmsg = b'0x0'
+    length: int = 0
+    statusmsg: int = 0x00
 
     def __init__(self) -> None:
         

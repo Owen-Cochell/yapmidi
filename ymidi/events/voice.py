@@ -5,7 +5,10 @@ An example of a voice channel event is the NoteOn class,
 which toggles a note to it's 'on' state with a given velocity. 
 """
 
+from __future__ import annotations
+
 from ymidi.events.base import ChannelMessage
+from ymidi.constants import NOTE_OFF, NOTE_ON, POLY_AFTERTOUCH, PROGRAM_CHANGE, AFTER_TOUCH, PITCH_BEND, CONTROL_CHANGE
 
 
 class ChannelVoiceMessage(ChannelMessage):
@@ -48,7 +51,7 @@ class NoteOn(NoteEvent):
     When encountered, we should toggle the specified note on.
     """
 
-    statusmsg = b'0x90'
+    statusmsg = NOTE_ON
     name = "NoteOn"
 
 
@@ -59,7 +62,7 @@ class NoteOff(NoteEvent):
     When encountered, we should toggle the specified note off.
     """
 
-    statusmsg = b'0x80'
+    statusmsg = NOTE_OFF
     name = "NoteOff"
 
 
@@ -72,7 +75,7 @@ class PolyphonicAfterTouch(NoteEvent):
     if the receiving component supports it.
     """
 
-    statusmsg = b'0xA0'
+    statusmsg = POLY_AFTERTOUCH
     name = "PolyphonicAfterTouch"
 
 
@@ -85,7 +88,7 @@ class ProgramChange(ChannelVoiceMessage):
     When encountered, the program of the channel should change.
     """
 
-    statusmsg = b'0xC'
+    statusmsg = PROGRAM_CHANGE
     name = "ProgramChange"
     length = 1
 
@@ -105,7 +108,7 @@ class AfterTouch(ChannelVoiceMessage):
     When encountered, the aftertouch for the entire channel should be changed.
     """
 
-    statusmsg = b'0xD0'
+    statusmsg = AFTER_TOUCH
     length = 1
     name = "AfterTouch"
 
@@ -123,7 +126,7 @@ class PitchBendEvent(ChannelVoiceMessage):
     When encountered, the pitch of the voices should be changed.
     """
 
-    statusmsg = b'0xE0'
+    statusmsg = PITCH_BEND
     length = 2
     name = "PitchBendEvent"
 
@@ -149,7 +152,7 @@ class ControlChange(ChannelVoiceMessage):
 
     __slots__ = ['control', 'value']
     length = 2
-    statusmsg = b'0xB0'
+    statusmsg = CONTROL_CHANGE
     name = 'Control Change'
 
     def __init__(self, control, value) -> None:
@@ -158,3 +161,8 @@ class ControlChange(ChannelVoiceMessage):
 
         self.control = control  # Control number
         self.value = value  # Value number
+
+
+# A tuple of ALL default voice events:
+
+VOICE_EVENTS = (NoteOn, NoteOff, PolyphonicAfterTouch, ProgramChange, AfterTouch, PitchBendEvent, ControlChange)

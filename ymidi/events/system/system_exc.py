@@ -40,7 +40,6 @@ class FullSystemExclusiveMessage(BaseSystemExclusiveMessage):
         self.data = bytearray(args)
 
 
-
 class UniversalSysExc(FullSystemExclusiveMessage):
     """
     Base class for Universal System Exclusive events.

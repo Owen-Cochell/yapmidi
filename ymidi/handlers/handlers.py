@@ -5,7 +5,7 @@ Here is a list of included handlers:
 
 * Nullhandler - Simply does nothing
 * PrintHandler - Prints the event to the console
-* Raisehandler - Raises a custom exception when called 
+* Raisehandler - Raises a custom exception when called
 """
 
 from ymidi.handlers.base import BaseHandler
