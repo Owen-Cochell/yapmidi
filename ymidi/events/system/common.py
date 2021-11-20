@@ -7,6 +7,7 @@ regardless of the channel.
 """
 
 from ymidi.events.base import SystemCommon
+from ymidi.constants import SONG_POSITION_POINTER, SONG_SELECT, TUNE_REQUEST, EOX
 
 
 class SongPositionPointer(SystemCommon):
@@ -24,12 +25,12 @@ class SongPositionPointer(SystemCommon):
     We accept a LSB and MSB to determine the song pointer.
     """
 
-    statusmsg = b'0xF2'
+    statusmsg = SONG_POSITION_POINTER
     name = "SongPositionPointer"
     length = 2
 
     def __init__(self, lsb, msb) -> None:
-        super().__init__()
+        super().__init__(lsb, msb)
 
         self.lsb = lsb  # Least significant bit
         self.msb = msb  # Most significant bit
@@ -43,12 +44,12 @@ class SongSelect(SystemCommon):
     a Start message event.
     """
 
-    statusmsg = b'0xF2'
+    statusmsg = SONG_SELECT
     length = 1
     name = "SongSelect"
 
     def __init__(self, song) -> None:
-        super().__init__()
+        super().__init__(song)
 
         self.song = song  # Selected song
 
@@ -61,7 +62,7 @@ class TuneRequest(SystemCommon):
     Most of the time, this event is ignored by digital synthesizers.
     """
 
-    statusmsg = b'0xF6'
+    statusmsg = TUNE_REQUEST
     length = 0
     name = "TuneRequest"
 
@@ -73,6 +74,11 @@ class EOX(SystemCommon):
     This event is sent when a system exclusive message is complete.
     """
 
-    statusmsg = b'0xF7'
+    statusmsg = EOX
     length = 0
     name = "EOX"
+
+
+# Tuple of all system common events:
+
+SYSTEM_COMMON_EVENTS = (SongPositionPointer, SongSelect, TuneRequest, EOX)

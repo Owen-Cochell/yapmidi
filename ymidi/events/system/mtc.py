@@ -5,7 +5,7 @@ These events are rarely used in the context of musical prefromance,
 and many users will simply ignore them.
 """
 
-from ymidi.events.system import SystemCommon
+from ymidi.events.base import SystemCommon
 
 
 class MIDITimeCode(SystemCommon):
@@ -45,7 +45,7 @@ class MTCQuarterFrame(SystemCommon):
     """
 
     __slots__ = ['type', 'value']
-    statusmsg = '0xF1'
+    statusmsg = 0xF1
 
     def __init__(self, type: int, value: int) -> None:
         super().__init__()

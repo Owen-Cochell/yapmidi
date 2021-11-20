@@ -11,6 +11,7 @@ which allows the sequenced content to be played back at a constant rate.
 """
 
 from ymidi.events.base import RealTimeMessage
+from ymidi.constants import TIMING_CLOCK, START_SEQUENCE, CONTINUE_SEQUENCE, STOP_SEQUENCE, ACTIVE_SENSING, SYSTEM_RESET
 
 
 class TimingClock(RealTimeMessage):
@@ -24,7 +25,7 @@ class TimingClock(RealTimeMessage):
     which allows the song sequence to play at a rate the transmitter expects. 
     """
 
-    statusmsg = b'0xF8'
+    statusmsg = TIMING_CLOCK
     name = "TimingClock"
 
 
@@ -38,7 +39,7 @@ class StartSequence(RealTimeMessage):
     to the beginning of the sequence.
     """
 
-    statusmsg = b'0xFA'
+    statusmsg = START_SEQUENCE
     name = "StartSequence"
 
 
@@ -52,7 +53,7 @@ class ContinueSequence(RealTimeMessage):
     at our current position when we receive the next TimingClock event.
     """
 
-    statusmsg = b'0xFB'
+    statusmsg = CONTINUE_SEQUENCE
     name = "ContinueSequence"
 
 
@@ -66,7 +67,7 @@ class StopSequence(RealTimeMessage):
     and log our current song pointer for future use.
     """
 
-    statusmsg = b'0xFC'
+    statusmsg = STOP_SEQUENCE
     name = "StopSequence"
 
 
@@ -84,7 +85,7 @@ class ActiveSensing(RealTimeMessage):
     and should return to a stable state.
     """
 
-    statusmsg = b'0xFE'
+    statusmsg = ACTIVE_SENSING
     name = "ActiveSensing"
 
 
@@ -99,5 +100,10 @@ class SystemReset(RealTimeMessage):
     (i.e automatically sent upon power up).
     """
 
-    statusmsg = b'0xFF'
+    statusmsg = SYSTEM_RESET
     name = "SystemReset"
+
+
+# A tuple of ALL realtime events:
+
+REALTIME_EVENTS = (TimingClock, StartSequence, ContinueSequence, StopSequence, ActiveSensing, SystemReset)

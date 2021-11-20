@@ -130,7 +130,7 @@ class NoteNormalize(MetaHandler):
     being passed to the NoteOn handlers that are meant to stop notes instead of stop them.
     This MetaHandler will convert NoteOn events with a velocity of 0
     into NoteOff events with a velocity of 64, which is the default velocity value.
-    Users can optionally provide a custom velocity value to set as default. 
+    Users can optionally provide a custom velocity value to set as default.
 
     We should really only be attached to the event handler,
     and NOT the meta handlers for output modules!
@@ -185,7 +185,7 @@ class ChannelMap(MetaHandler):
     The NoteOn status message for channel five(0x85)
     is diffrent then the note on message for channel 15(0x8f).
     Because the yap-midi events have unchanging status messages,
-    every NoteOn message will get sent to the same handler(0x8).
+    every NoteOn message will get sent to the same handler(0x80).
     The handler at that key may have to determine the channel
     the event is on before it works with it.
     This may be desirable, but some developers may want events to be sorted by channel.
@@ -236,8 +236,8 @@ class ChannelMap(MetaHandler):
         """
 
         # Get the true key:
-
-        key = bytes(str(event.statusmsg) + hex(event.channel)[2:], encoding='utf8')
+        
+        key = event.statusmsg & 0xF0 | event.channel
 
         # Setup a temporary mapping:
 

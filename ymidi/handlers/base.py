@@ -112,7 +112,7 @@ class MetaHandler(BaseHandler):
     Meta Handlers also have a built in priority that determines the order of execution.
     This value may get changed by the user loading the handler,
     or by a user who instantiates the meta handler,
-    but it is still important to put s good default priority
+    but it is still important to set a good default priority
     that the user may want.
     The lower the number, the higher the priority.
 
@@ -123,6 +123,7 @@ class MetaHandler(BaseHandler):
 
     NAME = "MetaHandler"
     PRIORITY = 20
+    KEYS = ()  # A tuple of events this handler should be attached to
 
     def __init__(self, name:str="", priority:int=None) -> None:
 
@@ -354,7 +355,7 @@ class HandlerCollection(ModuleCollection):
 
         return meta
 
-    def map_temp(self, event: BaseEvent, key: Union[bytes, Iterable, str]):
+    def map_temp(self, event: BaseEvent, key: Union[int, Iterable, str]):
         """
         Registers this event instance to the given handlers under the key.
 

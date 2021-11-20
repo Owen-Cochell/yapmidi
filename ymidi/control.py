@@ -41,7 +41,7 @@ class Controller(list):
 
     Some controllers have an LSB,
     meaning that they are mapped to other controllers
-    that act as an least significant byte to increase the resolution
+    that act as a least significant byte to increase the resolution
     from 128 steps to 16,384 steps.
     The controllers used as LSB are usually 32-63,
     and correspond to 0-31 respectively.

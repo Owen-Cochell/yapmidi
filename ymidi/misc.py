@@ -9,20 +9,6 @@ from typing import Any
 from ymidi.errors import ModuleLoadException,  ModuleStartException, ModuleStopException, ModuleUnloadException
 
 
-class EventCollection:
-    """
-    A collection of events.
-
-    This class is used mostly by the ModularDecoder.
-    It is responsable for keeping a collection of relevant
-    event that will be encountered when encoding or decoding.
-    It is also used to organise events by types,
-    which allows the ModularDecoder to treat the events in a meaningful way.
-
-    We are essentially a dictionary that tells the ModularDecoder
-    how to decode information.
-    """
-
 class BaseModule(object):
     """
     BaseModule - Class all yap-midi modules MUST inherit!
@@ -38,12 +24,20 @@ class BaseModule(object):
 
     A module has these states:
 
-    Created -> Loaded -> Started -> Running -> Stopped -> Unloaded
+                      +<------------------------------<+                                 
+    Created -> Loaded +> Started -> Running -> Stopped +> Unloaded
+
+    * Created - Module is instantiated
+    * Loaded - Module is loaded into a collection, relevant load code is ran
+    * Started - Module is started, relevant start code is ran 
+    * Running - Module is running and working with data given to it
+    * Stopped - Module is stopped, relevant stop code is ran and module is no longer working with data
+    * Unloaded - Module is unloaded, relevant unload code is ran
 
     This state chain shows each position a module can be in.
-    Each state leads to the other, with the exception of stop,
-    which can lead back to the started state, finally resting
-    in the running state until it is stopped again.
+    Each state leads to the other, and the chain restarts if the module is unloaded.
+    The exception to this rule is the stopped state,
+    which can lead back to the started state if the module is started again.
 
     These states are reached by calling the relevant methods
     for the given module.

@@ -37,7 +37,7 @@ class NoteEvent(ChannelMessage):
 
     def __init__(self, pitch: int, velocity: int) -> None:
 
-        super().__init__()
+        super().__init__(pitch, velocity)
 
         self.pitch = pitch  # Pitch of the note, in raw MIDI note format
         self.velocity = velocity  # Velocity of the note, in raw MIDI velocity format
@@ -93,7 +93,7 @@ class ProgramChange(ChannelVoiceMessage):
     length = 1
 
     def __init__(self, program) -> None:
-        super().__init__()
+        super().__init__(program)
 
         self.program = program  # Program number to switch to
 
@@ -113,7 +113,7 @@ class AfterTouch(ChannelVoiceMessage):
     name = "AfterTouch"
 
     def __init__(self, velocity) -> None:
-        super().__init__()
+        super().__init__(velocity)
 
         self.velocity = velocity
 
@@ -132,7 +132,7 @@ class PitchBendEvent(ChannelVoiceMessage):
 
     def __init__(self, fine, coarse) -> None:
 
-        super().__init__()
+        super().__init__(fine, coarse)
 
         self.fine = fine  # Fine setting for the event
         self.coarse = coarse  # Corse setting for the event
@@ -157,7 +157,7 @@ class ControlChange(ChannelVoiceMessage):
 
     def __init__(self, control, value) -> None:
 
-        super().__init__()
+        super().__init__(control, value)
 
         self.control = control  # Control number
         self.value = value  # Value number

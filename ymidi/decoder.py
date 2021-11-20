@@ -15,10 +15,13 @@ but you can use these standalone if you wish.
 import asyncio
 import struct
 
-from typing import Union, Dict
+from typing import Any, Union, Dict
 
-from ymidi.events.base import BaseEvent
+from ymidi.events.base import BaseEvent, ChannelMessage
 from ymidi.events.voice import VOICE_EVENTS
+from ymidi.events.system.realtime import REALTIME_EVENTS
+from ymidi.events.system.common import SYSTEM_COMMON_EVENTS
+from ymidi.events.system.system_exc import SYSTEM_EXCLUSIVE_EVENTS
 
 
 class BaseDecoder(object):
@@ -130,7 +133,7 @@ class BaseDecoder(object):
         """
         Determines if this bit is a status byte.
 
-        A status byte will always be between 0-127.
+        A status byte will always be between 128-255.
         We return True if the byte is a status byte.
 
         :param int: Int to check
@@ -141,20 +144,23 @@ class BaseDecoder(object):
 
         # Determine status byte and return:
 
-        return 0 <= num <= 127
+        return 128 <= num <= 255
 
     def is_data(self, num: int) -> bool:
         """
         Determines if this bit is a data byte.
 
-        A data byte will always be between 128-255.
-        We treturn True if the byte is a data byte.
+        A data byte will always be between 0-127.
+        We return True if the byte is a data byte.
 
         :param num: Int to check
         :type num: int
         :return: True is data byte, False if not
         :rtype: bool
         """
+
+        return 0 <= num <= 127
+
 
 class ModularDecoder(BaseDecoder):
     """
@@ -171,7 +177,7 @@ class ModularDecoder(BaseDecoder):
     5.) Determine if the event is a channel message, if so attach the channel
     6.) Return the event
 
-    Decoding works in a similar way:
+    Encoding works in a similar way:
 
     1.) Encode status message of event, encode channel if necessary
     2.) Get each relevant attributes using __slots__()
@@ -203,13 +209,21 @@ class ModularDecoder(BaseDecoder):
     This decoder can either be used as an incremental decoder,
     or as an instant decoder.
     The component using this decoder can decide which is the best!
+    
+    TODO: Implement checks to ensure interrupts are valid?
     """
 
     def __init__(self) -> None:
         super().__init__()
 
-        self.collection: Dict[int, BaseEvent] = {}  # Collection of events
-        self.status = None  # statusmesage of the last event processed
+        self.collection: Dict[int, Any] = {}  # Collection of events
+        self.decode_status = []  # statusmessage of the last event decoded
+        self.encode_status = []  # Statusmessage of the last event encoded
+
+        # --== Sequential Decoding State: ==--
+
+        self.data = []  # Data we are currently working with
+        self.event = []  # Event instances to work with
 
     def load_default(self):
         """
@@ -219,7 +233,7 @@ class ModularDecoder(BaseDecoder):
         and add it to the collection.
         """
 
-        events = VOICE_EVENTS
+        events = VOICE_EVENTS + REALTIME_EVENTS + SYSTEM_COMMON_EVENTS + SYSTEM_EXCLUSIVE_EVENTS
 
         # Iterate over all events in yap-midi:
 
@@ -227,11 +241,34 @@ class ModularDecoder(BaseDecoder):
 
             # Add the event to the collection:
 
-            self.collection[event.statusmsg] = event
+            if event.has_channel:
+                
+                # Encode channel info in the event:
+                
+                for item in range(0,16):
+                    
+                    self.collection[event.statusmsg & 0xF0 | item] = event
+
+            else:
+
+                # Just add the event:
+
+                self.collection[event.statusmsg] = event
 
     def decode(self, bts: bytes) -> BaseEvent:
         """
         Decodes the given bytes into a yap-midi event.
+
+        If the status byte is not provided,
+        then we will use running status to determine 
+        the event type.
+        
+        This method does NOT support MIDI event interruption.
+        Because of this, it is recommended to use this method
+        on byte sources that are guaranteed to be structured
+        and organized correctly.
+        This also means this method will be faster than sequential decoding!
+        TODO: Confirm this and backup with some numbers
 
         :param bytes: Bytes to decode
         :type bytes: bytes
@@ -241,16 +278,176 @@ class ModularDecoder(BaseDecoder):
 
         # Determine if we are working with a new event:
 
-        if self.is_status(bts[0]):
+        if self.is_status(int.from_bytes(bts[0], 'big')):
 
             # Working with a new event! Set our current status:
 
-            self.status = bts[0]
+            self.decode_status[0] = bts[0]
 
         # Get the event we are working with:
 
-        event = self.collection[self.status]
+        event = self.collection[self.decode_status[0]]
 
-        # Determine if the given data is the correct length:
+        # Decode the values:
 
-        assert len(bts) - 1 == event.LENGTH
+        val = []
+
+        for item in bts[0:]:
+
+            val.append(int(item))
+
+        # Are we a variable length event?
+        
+        if event.length == -1:
+
+            # Ensure the last value is the end event:
+            
+            assert val[-1] == event.end.status
+            
+            # Remove the last data value:
+            
+            val.pop(-1)
+
+        # Create the event:
+
+        final = event(*val)
+
+        # Determine if event is channel message:
+
+        if final.has_channel:
+
+            # Attach channel data:
+
+            final.channel = self.decode_status[0] & 0x0F
+
+        # Return the final event:
+
+        return final
+
+    def seq_decode(self, bts: bytes) -> Union[None, BaseEvent]:
+        """
+        Sequentially decodes the given bytes.
+
+        This method processes individual bytes in a sequence,
+        which is great if you don't know the length of your events,
+        or you can't structure your bytes.
+
+        This method returns None when more bytes are required to decode,
+        and returns the final event when the decoding operation is completed.
+
+        Event interruption is supported in this method!
+        If you are unsure if out of place MIDI events will interrupt the stream,
+        then you should use this method to sort out the chaos.
+
+        :param byte: Byte to decode
+        :type byte: bytes
+        :return: None if more bytes are required, event if operation is completed
+        :rtype: Union[None, BaseEvent]
+        """
+
+        num = int.from_bytes(bts, 'big')
+        done = False
+
+        # Determine if we are working with a status byte:
+
+        if self.is_status(num):
+
+            # Get the event:
+
+            event = self.collection[num]
+
+            # Check if the event is end of variable length sequence:
+
+            if self.event and self.event[0].length == -1 and self.event[0].end.statusmsg == num:
+
+                # We came to the end of the sequence, exit time:
+
+                done = True
+
+            # Check if the event is ready to be returned now:
+
+            elif event.length == 0:
+
+                # Return the event, save us some time:
+
+                return event()
+
+            else:
+
+                # Configure some data:
+
+                self.decode_status.insert(0, num)
+                self.data.insert(0, [])
+                self.event.insert(0, event)
+
+                return None
+
+        else:
+
+            # Add the byte to the data buffer:
+
+            self.data[0].append(bts)
+
+        # Check if the data is ready to return:
+
+        if done or (len(self.data[0]) == self.event[0].length):
+
+            # Create the event:
+
+            event = self.event[0](*self.data[0])
+
+            # Clear the decoding state:
+
+            self.data[0].clear()
+
+            # Check if we have to add a channel:
+
+            if event.has_channel:
+                
+                # Add the event:
+                
+                event.channel = self.decode_status[0] & 0x0F
+
+            # Check if we are a nested event:
+
+            if len(self.decode_status) > 1:
+
+                # We have other events to process:
+
+                self.decode_status.pop(0)
+                self.data.pop(0)
+                self.event.pop(0)
+
+            # Return the event:
+
+            return event
+
+        # Not done, return None
+
+        return None
+
+    def encode(self, event: BaseEvent) -> bytes:
+        """
+        Encodes the given event into bytes.
+
+        :param event: Event to encode
+        :type event: BaseEvent
+        :return: Encoded bytes
+        :rtype: bytes
+        """
+
+        # Get the status message of the event:
+        
+        status = event.statusmsg
+        
+        # Determine if we are working with channels:
+        
+        if event.has_channel:
+            
+            # Encode the channel number in the status message:
+
+             status = status & 0xF0 | event.channel
+        
+        # Return the final data:
+        
+        return bytes((status,) + event.data)

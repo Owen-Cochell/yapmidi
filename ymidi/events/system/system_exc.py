@@ -8,9 +8,11 @@ sampler data, sequencer data, ect.
 """
 
 from ymidi.events.base import BaseSystemExclusiveMessage
+from ymidi.events.system.common import EOX
+from ymidi.constants import SYSTEM_EXCLUSIVE
 
 
-class FullSystemExclusiveMessage(BaseSystemExclusiveMessage):
+class SystemExclusive(BaseSystemExclusiveMessage):
     """
     Base class for SystemExclusive events.
     This class defines some extra functionality 
@@ -29,18 +31,19 @@ class FullSystemExclusiveMessage(BaseSystemExclusiveMessage):
 
     __slots__ = ['device']
 
-    statusmsg = b'0xF0'
+    statusmsg = SYSTEM_EXCLUSIVE
     name = 'SystemExclusive'
     length = -1
-    header = b'0x00'  # Header of the System Exclusive message
+    end = EOX  # Event that ends the message
+    header = 0x00  # Header of the System Exclusive message
 
     def __init__(self, *args) -> None:
         super().__init__()
 
-        self.data = bytearray(args)
+        self.data = args
 
 
-class UniversalSysExc(FullSystemExclusiveMessage):
+class UniversalSysExc(SystemExclusive):
     """
     Base class for Universal System Exclusive events.
 
@@ -54,9 +57,9 @@ class UniversalSysExc(FullSystemExclusiveMessage):
     and are intended to be processed by ALL devices that can handle them.
     """
 
-    header = b'0x00'  # Header of the SystemExclusive event
-    subid1 = b'0x00'  # Sub-header 1, used to identify the message
-    subid2 = b'0x00'  # Sub-header 2, also used to identify the message
+    header = 0x00  # Header of the SystemExclusive event
+    subid1 = 0x00  # Sub-header 1, used to identify the message
+    subid2 = 0x00  # Sub-header 2, also used to identify the message
     name = "UniversalSysExc"
 
     def __init__(self, device, *args) -> None:
@@ -65,7 +68,7 @@ class UniversalSysExc(FullSystemExclusiveMessage):
         self.device = device  # Device ID this message was intended for
 
 
-class RealTimeSysExc(FullSystemExclusiveMessage):
+class RealTimeSysExc(SystemExclusive):
     """
     The RealTimeSysExc event is a System Exclusive message
     that is used to convey realtime data.
@@ -78,11 +81,11 @@ class RealTimeSysExc(FullSystemExclusiveMessage):
     as they will be defined on the sub-class level.
     """
 
-    header = b'0x7F'
+    header = 0x7F
     name = "RealTimeSysExc"
 
 
-class NonRealTimeSysExc(FullSystemExclusiveMessage):
+class NonRealTimeSysExc(SystemExclusive):
     """
     The NonRealTimeSysExc event is a System Exclusive message
     that is used to convey non-realtime data.
@@ -95,5 +98,9 @@ class NonRealTimeSysExc(FullSystemExclusiveMessage):
     as they will be defined on the sub-class level.
     """
 
-    header = b'0x7E'
+    header = 0x7E
     name = "NonRealTimeSysExc"
+
+# Tuple of ALL system exclusive events:
+
+SYSTEM_EXCLUSIVE_EVENTS = (SystemExclusive,)

@@ -32,12 +32,12 @@ class YMSequencer(HandlerCollection):
     for reacting to MIDI messages.
 
     YMSequencer also offers a meta-handler framework.
-    A meta-handler is a event handler that changes the state
+    A meta-handler is an event handler that changes the state
     of the packets,
     or other yap-midi components,
     before they reach the event handlers.
     This allows for MIDI events to be filtered,
-    normalized, and otherwise altered to make handling them a breeze. 
+    normalized, and otherwise altered to make handling them a breeze.
 
     Finally, YMSequencer eases the process of using IO modules,
     and allows for MIDI events to be transferred to another location 
