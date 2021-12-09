@@ -65,6 +65,13 @@ class BaseIO(BaseModule):
 
         raise NotImplementedError("Must be overloaded in child class!")
 
+    def __iter___(self):
+        """
+        Prepare this IO module for iteration.
+
+        :return: [description]
+        :rtype: [type]
+        """
 
 class NullIO(BaseIO):
     """
@@ -96,6 +103,41 @@ class NullIO(BaseIO):
         """
 
         pass
+
+
+class EchoIO(BaseIO):
+    """
+    NullIO - Adds inputted events to our output queue.
+    
+    As we receive inputs,
+    we output them when requested.
+    """
+    
+    def __init__(self) -> None:
+
+        super().__init__(None, None, name="EchoIO")
+
+        self.queue = asyncio.queues.Queue()
+
+    async def get(self) -> BaseEvent:
+        """
+        Returns echoed content from our queue.
+
+        :return: Event from queue
+        :rtype: BaseEvent
+        """
+        
+        return await self.queue.get()
+    
+    async def put(self, event: BaseEvent):
+        """
+        Put the event into our queue.
+
+        :param event: Event to put into our queue
+        :type event: BaseEvent
+        """
+        
+        await self.queue.put(event)
 
 
 class IOCollection(ModuleCollection):

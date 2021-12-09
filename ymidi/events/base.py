@@ -10,6 +10,8 @@ IT IS NOT RECOMMENDED TO USE THESE EVENTS!
 You should instead import more relevant events from elseware.
 """
 
+from ymidi.constants import META
+
 
 class BaseEvent(object):
     """
@@ -113,3 +115,15 @@ class BaseSystemExclusiveMessage(SystemMessage):
     """
 
     name = "BaseSystemExclusive"
+
+
+class BaseMetaMesage(BaseEvent):
+    """
+    Base class for Meta events.
+    This class has no functionality on it's own,
+    and is used to identify MetaEvents.
+    """
+    
+    name: str = "BaseMeta"
+    statusmsg = META
+    type: int = 0x00  # Meta event type

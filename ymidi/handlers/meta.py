@@ -117,7 +117,7 @@ class AdvancedEventFilter(MetaHandler):
         return None
 
 
-class NoteNormalize(MetaHandler):
+class OnToOff(MetaHandler):
     """
     Maps NoteOn events with velocity of 0 to NoteOff event handlers.
 
