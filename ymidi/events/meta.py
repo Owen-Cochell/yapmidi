@@ -55,7 +55,7 @@ class CopyrightNotice(MetaText):
     
     name = "CopyrightNotice"
     type = COPYRIGHT
-    
+
 
 class TrackName(MetaText):
     """
@@ -69,7 +69,7 @@ class TrackName(MetaText):
 
     name = "TrackName"
     type = TRACK_NAME
-    
+
 
 class InstrumentName(MetaText):
     """
@@ -78,7 +78,7 @@ class InstrumentName(MetaText):
 
     name = "InstrumentName"
     type = INSTRUMENT
-    
+
 
 class Lyric(MetaText):
     """
@@ -99,7 +99,7 @@ class Marker(MetaText):
     
     name = "Marker"
     type = MARKER
-    
+
 
 class CuePoint(MetaText):
     """
@@ -162,7 +162,7 @@ class SetTempo(BaseMetaMesage):
         self.bt1 = bt1
         self.bt2 = bt2
         self.bt3 = bt3
-        
+
 
 class SMPTEOffset(BaseMetaMesage):
     """
@@ -172,11 +172,11 @@ class SMPTEOffset(BaseMetaMesage):
     This event should be present at the start of the track
     in SMPTE format.
     """
-    
+
     name = "SMPTEOffset"
     type = SMPTE_OFFSET
     legnth = 5
-    
+
     def __init__(self, hr, mn, se, fr, ff) -> None:
         super().__init__(hr, mn, se, fr, ff)
         
@@ -199,11 +199,11 @@ class TimeSignature(BaseMetaMesage):
     and the final value expresses the number of notated 32nd notes
     in a quarter note(24 MIDI clocks).
     """
-    
+
     name = "TimeSignature"
     type = TIME_SIGNATURE
     legnth = 4
-    
+
     def __init__(self, numerator, denominator, cpm, npq) -> None:
         super().__init__(numerator, denominator, cpm, npq)
         
@@ -227,7 +227,7 @@ class KeySignature(BaseMetaMesage):
     mi = 0: major key
     mi = 1: minor key
     """
-    
+
     name = "KeySignature"
     type = KEY_SIGNATURE
     legnth = 2
@@ -243,7 +243,7 @@ class Reserved(BaseMetaMesage):
     """
     Special meta events for sequencers to implement.
     """
-    
+
     name = "Reserved"
     type = RESERVED
     legnth = -1

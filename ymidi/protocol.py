@@ -22,4 +22,26 @@ class BaseProtocol(object):
     They should have the freedom to do what they need to do. 
     """
 
-    pass
+    def read(self, byts: int) -> bytes:
+        """
+        Reads a given amount of bytes.
+
+        :param byts: Number of bytes to read
+        :type byts: int
+        :return: Bytes read
+        :rtype: bytes
+        """
+
+        pass
+
+    def write(self, byts: bytes) -> int:
+        """
+        Writes the given bytes.
+
+        :param byts: Bytes to write
+        :type byts: bytes
+        :return: Number of bytes written
+        :rtype: int
+        """
+
+        pass

@@ -65,13 +65,6 @@ class BaseIO(BaseModule):
 
         raise NotImplementedError("Must be overloaded in child class!")
 
-    def __iter___(self):
-        """
-        Prepare this IO module for iteration.
-
-        :return: [description]
-        :rtype: [type]
-        """
 
 class NullIO(BaseIO):
     """
@@ -128,7 +121,7 @@ class EchoIO(BaseIO):
         """
         
         return await self.queue.get()
-    
+
     async def put(self, event: BaseEvent):
         """
         Put the event into our queue.
@@ -136,7 +129,7 @@ class EchoIO(BaseIO):
         :param event: Event to put into our queue
         :type event: BaseEvent
         """
-        
+
         await self.queue.put(event)
 
 

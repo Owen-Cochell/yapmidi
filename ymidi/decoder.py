@@ -451,3 +451,12 @@ class ModularDecoder(BaseDecoder):
         # Return the final data:
         
         return bytes((status,) + event.data)
+
+
+class MetaDecoder(BaseDecoder):
+    """
+    MetaDecoder - 
+
+    :param BaseDecoder: [description]
+    :type BaseDecoder: [type]
+    """
