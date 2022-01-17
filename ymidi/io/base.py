@@ -40,8 +40,8 @@ class BaseIO(BaseModule):
 
         super().__init__(name=name)
 
-        self.proto = proto  # Protocol object in use
-        self.decoder = decoder  # Decoder in use
+        self.proto: BaseProtocol = proto  # Protocol object in use
+        self.decoder: BaseDecoder = decoder  # Decoder in use
 
     async def get(self) -> BaseEvent:
         """
@@ -64,6 +64,26 @@ class BaseIO(BaseModule):
         """
 
         raise NotImplementedError("Must be overloaded in child class!")
+
+    async def start(self):
+        """
+        Starts this IO module.
+        
+        All child IO modules should call this function!
+        We make sure the protocol object is properly started.
+        """
+
+        self.proto.start()
+
+    async def stop(self):
+        """
+        Stops this IO module.
+        
+        All child IO modules should call this function!
+        We make sure the protocol object is stopped correctly.
+        """
+        
+        self.proto.stop()
 
 
 class NullIO(BaseIO):

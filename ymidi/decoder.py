@@ -15,13 +15,14 @@ but you can use these standalone if you wish.
 import asyncio
 import struct
 
-from typing import Any, Union, Dict
+from typing import Any, Union, Dict, Tuple
 
-from ymidi.events.base import BaseEvent, ChannelMessage
+from ymidi.events.base import BaseEvent, BaseMetaMesage
 from ymidi.events.voice import VOICE_EVENTS
 from ymidi.events.system.realtime import REALTIME_EVENTS
 from ymidi.events.system.common import SYSTEM_COMMON_EVENTS
 from ymidi.events.system.system_exc import SYSTEM_EXCLUSIVE_EVENTS
+from ymidi.constants import META
 
 
 class BaseDecoder(object):
@@ -255,6 +256,20 @@ class ModularDecoder(BaseDecoder):
 
                 self.collection[event.statusmsg] = event
 
+    def get_legnth(self, status: int) -> int:
+        """
+        Gets the length of the event using the given status message.
+        
+        We use our collection of events to retrieve the legnth.
+
+        :param status: Status message of the event
+        :type status: int
+        :return: Length of event in bytes
+        :rtype: int 
+        """
+        
+        return self.collection[status].length
+
     def decode(self, bts: bytes) -> BaseEvent:
         """
         Decodes the given bytes into a yap-midi event.
@@ -455,8 +470,72 @@ class ModularDecoder(BaseDecoder):
 
 class MetaDecoder(BaseDecoder):
     """
-    MetaDecoder - 
-
-    :param BaseDecoder: [description]
-    :type BaseDecoder: [type]
+    MetaDecoder - Decodes Meta Events present in MIDI files.
+    
+    Because Meta events are specific to MIDI files,
+    and that decoding them is somewhat non-standard,
+    decoding operations for them are placed into a separate class
+    that is only used when necessary.
+    
+    A meta event has a status message of 0xFF,
+    and has a 'type', 'length', and 'bytes' fields.
+    We use these fields to determine the type of event.
+    
+    From here, it is quite simple as we are given the legnth of the event,
+    so we just read a specific amount of bytes.
+    
+    This encoder is modular, similar to the ModularDecoder,
+    which allows custom meta events to be registered and loaded for proper decoding.
+    We are usually used in conjunction with the ModularDecoder
+    to offer handling of meta events. 
     """
+    
+    def __init__(self) -> None:
+        super().__init__()
+        
+        self.collection: Dict[int, Any] = {}  # Collection of events
+    
+    def read_varlen(self, bts: bytes) -> Tuple[int,int]:
+        """
+        Reads a variable legnth integer(varlen) from the given bytes.
+        
+        We will continue through the bytes until we find a varlen.
+        We also return the number of bytes we had to read.
+
+        :param bts: Bytes to read
+        :type bts: bytes
+        :return: 
+        :rtype: int
+        """
+        
+        pass
+    
+    def decode(self, bts: bytes) -> BaseMetaMesage:
+        """
+        Decodes the given bytes into a Meta Event.
+        
+        We expect ALL meta event bytes to be present,
+        including the status message, type, and length felids.
+
+        :param bts: Bytes to decode
+        :type bts: bytes
+        :return: Valid MetaEvent
+        :rtype: BaseEvent
+        """
+
+        # Check if the first byte is a valid status message
+
+        if bts[0] is not META:
+            
+            # Raise a value error, invalid event given:
+            
+            raise ValueError("Invalid MetaEvent! Status message MUST be 0xFF!")
+        
+        # Get the event instance to work with:
+        
+        event = self.collection[bts[1]]
+        
+        # Check the legnth of the event:
+        
+        pass
+        

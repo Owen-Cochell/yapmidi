@@ -22,7 +22,7 @@ class BaseProtocol(object):
     They should have the freedom to do what they need to do. 
     """
 
-    def read(self, byts: int) -> bytes:
+    async def read(self, byts: int) -> bytes:
         """
         Reads a given amount of bytes.
 
@@ -34,7 +34,7 @@ class BaseProtocol(object):
 
         pass
 
-    def write(self, byts: bytes) -> int:
+    async def write(self, byts: bytes) -> int:
         """
         Writes the given bytes.
 
@@ -44,4 +44,24 @@ class BaseProtocol(object):
         :rtype: int
         """
 
+        pass
+
+    def start(self):
+        """
+        Starts this Protocol object.
+        
+        This object should do startup stuff here
+        that prepares it for use.
+        """
+        
+        pass
+
+    def stop(self):
+        """
+        Stops this Protocol object.
+        
+        The object can safely assume that it will not
+        be called again until the start method is called.
+        """
+        
         pass

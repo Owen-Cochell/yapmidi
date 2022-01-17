@@ -2,7 +2,9 @@
 This file contains all MIDI Meta events.
 
 Meta events are used in MIDI files to provide
-metadata such as temp, track name, copyright info, ect.    
+metadata such as temp, track name, copyright info, ect.
+
+TODO: Improve meta event descriptions!
 """
 
 from ymidi.events.base import BaseMetaMesage

@@ -46,6 +46,8 @@ class BaseModule(object):
     these methods manually.
 
     Sub-classes can and should add functionality to this class.
+    
+    TODO: Fix docstrings for this class!
     """
 
     NAME = "BaseModule"  # Absolute name of the module
