@@ -7,7 +7,7 @@ metadata such as temp, track name, copyright info, ect.
 TODO: Improve meta event descriptions!
 """
 
-from ymidi.events.base import BaseMetaMesage
+from ymidi.events.base import BaseMetaMesage, BaseEvent
 from ymidi.constants import CHANNEL_PREFIX, COPYRIGHT, CUE_POINT, INSTRUMENT, KEY_SIGNATURE, LYRIC, MARKER, RESERVED, SEQUENCE_NUMBER, SMPTE_OFFSET, TEMPO_SET, TEXT, TIME_SIGNATURE, TRACK_END, TRACK_NAME
 
 

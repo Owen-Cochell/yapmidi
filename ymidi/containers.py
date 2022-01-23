@@ -10,11 +10,11 @@ class TrackInfo(dataclass):
     An object that contains info about a specific track.
     
     The data in this object is used for keeping track of track statistics.
-    We contain data about the track type, 
-
-    :param dataclass: [description]
-    :type dataclass: [type]
+    We allow for these attributes to be manually defined,
+    and we also allow for auto-track traversal to fill in this info.
     """
+
+    pass
 
 class TrackPattern(list):
     """

@@ -35,3 +35,7 @@ build/
 
 docs/build/
 docs/source/_build
+
+# MIDI files:
+
+*.mid

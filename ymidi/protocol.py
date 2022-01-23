@@ -8,6 +8,9 @@ and only used to get data for the high level components.
 """
 
 
+from re import L
+
+
 class BaseProtocol(object):
     """
     BaseProtocol - Class all sub-protocols MUST inherit!
@@ -65,3 +68,21 @@ class BaseProtocol(object):
         """
         
         pass
+
+
+class FileProtocol(BaseProtocol):
+    """
+    FileProtocol - Reads data from a file on the operating system.
+
+    Because file operations are NOT asynchronous,
+    use utilise executers to emulate asynchronous activity.
+
+    We read bytes by default. Users can open the file in write mode
+    by passing True to the 'write' parameter.
+
+    By default, we read and write all data as bytes.
+    Users can define a custom mode if they so choose.
+    """
+
+    def __init__(self, path: str, write: bool=False, extra: str='b') -> None:
+        super().__init__()
