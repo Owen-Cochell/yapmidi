@@ -7,8 +7,9 @@ Protocol objects have NO understanding of the MIDI specifications,
 and only used to get data for the high level components.
 """
 
+import asyncio
 
-from re import L
+from numpy import byte
 
 
 class BaseProtocol(object):
@@ -85,4 +86,43 @@ class FileProtocol(BaseProtocol):
     """
 
     def __init__(self, path: str, write: bool=False, extra: str='b') -> None:
+
         super().__init__()
+
+        self.path = path  # Path to the file to read
+        self.opener = open(path, ("b" if write else "r") + extra)
+        self.loop = asyncio.get_event_loop()
+
+    async def read(self, byts: int) -> bytes:
+        """
+        Reads the given number of bytes from the file.
+
+        If the file is not opened in read mode,
+        then an exception will be raised.
+
+        We return the bytes read from the file.
+
+        :param byts: Number of bytes to read
+        :type byts: int
+        :return: Bytes read from the file.
+        :rtype: bytes
+        """
+
+        return await asyncio.to_thread(self.opener.read, byts)
+
+    async def write(self, byts: bytes) -> int:
+        """
+        Writes the given bytes to a file.
+
+        If the file is not opened in write mode,
+        then an exception is raised.
+
+        We return the number of bytes written.
+
+        :param byts: Bytes to write
+        :type byts: bytes
+        :return: Number of bytes written
+        :rtype: int
+        """
+
+        return await asyncio.to_thread(self.opener, byts)
