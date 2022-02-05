@@ -18,7 +18,7 @@ class Controller(list):
     Controllers are numbered 0-119,
     which are mapped to a value 0-128.
     The controller numbers are defined by the MIDI specifications,
-    and usuers will probably use yap-midi constants to access them.
+    and users will probably use yap-midi constants to access them.
 
     Our low-level structure looks something like this:
 

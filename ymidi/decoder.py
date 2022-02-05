@@ -13,6 +13,8 @@ but you can use these standalone if you wish.
 """
 
 import asyncio
+from ctypes.wintypes import MSG
+from lib2to3.pytree import Base
 import struct
 
 from typing import Any, Union, Dict, Tuple
@@ -22,6 +24,7 @@ from ymidi.events.voice import VOICE_EVENTS
 from ymidi.events.system.realtime import REALTIME_EVENTS
 from ymidi.events.system.common import SYSTEM_COMMON_EVENTS
 from ymidi.events.system.system_exc import SYSTEM_EXCLUSIVE_EVENTS
+from ymidi.events.meta import META_EVENTS
 from ymidi.constants import META
 
 
@@ -242,19 +245,39 @@ class ModularDecoder(BaseDecoder):
 
             # Add the event to the collection:
 
-            if event.has_channel:
+            self.load_event(event)
+
+    def load_event(self, event: BaseEvent):
+        """
+        Loads the given event to the collection.
+        
+        We first ensure that this event is valid
+        (inherits BaseEvent),
+        and the we register it for use.
+
+        :param event: Event to register
+        :type event: BaseEvent
+        """
+
+        if not isinstance(event, BaseEvent):
+
+            # Not a valid event, raise an exception!
+
+            raise ValueError("Event does not inherit BaseEvent!")
+
+        if event.has_channel:
+            
+            # Encode channel info into the event:
+            
+            for item in range(0,16):
                 
-                # Encode channel info in the event:
-                
-                for item in range(0,16):
-                    
-                    self.collection[event.statusmsg & 0xF0 | item] = event
+                self.collection[event.statusmsg & 0xF0 | item] = event
 
-            else:
+        # Add the event:
 
-                # Just add the event:
+        else:
 
-                self.collection[event.statusmsg] = event
+            self.collection[event.statusmsg] = event
 
     def get_legnth(self, status: int) -> int:
         """
@@ -486,29 +509,59 @@ class MetaDecoder(BaseDecoder):
     
     This encoder is modular, similar to the ModularDecoder,
     which allows custom meta events to be registered and loaded for proper decoding.
-    We are usually used in conjunction with the ModularDecoder
-    to offer handling of meta events. 
+    We inherit the BaseDecoder, and use it to decode any non-meta events.
     """
     
     def __init__(self) -> None:
         super().__init__()
         
-        self.collection: Dict[int, Any] = {}  # Collection of events
+        self.meta_collection: Dict[int, Any] = {}  # Collection of meta events
     
-    def read_varlen(self, bts: bytes) -> Tuple[int,int]:
+    def load_default(self):
         """
-        Reads a variable legnth integer(varlen) from the given bytes.
+        Loads the default meta-handlers.
         
-        We will continue through the bytes until we find a varlen.
-        We also return the number of bytes we had to read.
+        We also load the default events as specified in the ModularDecoder.
+        """
+        
+        for event in META_EVENTS:
+            
+            # Add each meta event:
+            
+            self.load_event(event)
+        
+    def load_event(self, event: BaseEvent):
+        """
+        Loads the given event.
 
-        :param bts: Bytes to read
-        :type bts: bytes
-        :return: 
-        :rtype: int
+        If we are working with a meta-event,
+        then we load it into the meta collection.
+        If this is not a meta event,
+        then we send it along to the ModularDecoder for loading.
+
+        :param event: Event to be loaded
+        :type event: BaseEvent
         """
+
+        if not isinstance(event, BaseEvent):
+
+            # Not a valid event, raise an exception!
+
+            raise ValueError("Event does not inherit BaseEvent!")
+
+        # Check if the event is a meta event:
         
-        pass
+        if event.statusmsg == MSG:
+            
+            # Valid meta event, load it:
+            
+            self.meta_collection[event.type] = event
+            
+        else:
+            
+            # Not a meta event, pass it along:
+            
+            super(BaseDecoder).load_event(event)
     
     def decode(self, bts: bytes) -> BaseMetaMesage:
         """
@@ -527,9 +580,9 @@ class MetaDecoder(BaseDecoder):
 
         if bts[0] is not META:
             
-            # Raise a value error, invalid event given:
+            # Not a meta event, pass it along:
             
-            raise ValueError("Invalid MetaEvent! Status message MUST be 0xFF!")
+            return super(ModularDecoder).decode(bts)
         
         # Get the event instance to work with:
         

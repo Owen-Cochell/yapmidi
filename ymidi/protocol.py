@@ -9,8 +9,6 @@ and only used to get data for the high level components.
 
 import asyncio
 
-from numpy import byte
-
 
 class BaseProtocol(object):
     """

@@ -71,4 +71,5 @@ def variable_decode():
             
             print("Data: {}".format(value.data))
 
+
 midi_stream()

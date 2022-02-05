@@ -249,3 +249,10 @@ class Reserved(BaseMetaMesage):
     name = "Reserved"
     type = RESERVED
     legnth = -1
+
+
+# A tuple of ALL meta events:
+
+META_EVENTS = (SequenceNumber, MetaText, CopyrightNotice, TrackName, InstrumentName,
+               Lyric, Marker, CuePoint, ChannelPrefix, EndOfTrack, SetTempo, SMPTEOffset, 
+               TimeSignature, KeySignature, Reserved)

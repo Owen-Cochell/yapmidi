@@ -52,7 +52,7 @@ class MIDIFile(BaseIO):
 
     NAME = "MIDIFile"
 
-    def __init__(self, path:str='', buffer: int=None, name: str='') -> None:
+    def __init__(self, path:str='', buffer: int=-1, name: str='') -> None:
 
         super().__init__(BaseProtocol(), ModularDecoder(), name=name)
 

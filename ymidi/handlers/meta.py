@@ -5,6 +5,12 @@ These meta handler can be very useful for
 filtering/altering events,
 as well as changing the state of yap-midi
 when certain events are received.
+
+TODO:
+Controller mapper
+NoteOn optimizations(Opposite of OntoOff)
+General MIDI setup?
+Sys exc. adder?
 """
 
 import asyncio

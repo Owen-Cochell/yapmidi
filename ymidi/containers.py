@@ -16,6 +16,7 @@ class TrackInfo(dataclass):
 
     pass
 
+
 class TrackPattern(list):
     """
     A collection of tracks.
