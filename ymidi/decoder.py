@@ -13,11 +13,11 @@ but you can use these standalone if you wish.
 """
 
 import asyncio
-from ctypes.wintypes import MSG
-from lib2to3.pytree import Base
 import struct
 
 from typing import Any, Union, Dict, Tuple
+
+from numpy import byte
 
 from ymidi.events.base import BaseEvent, BaseMetaMesage
 from ymidi.events.voice import VOICE_EVENTS
@@ -516,7 +516,10 @@ class MetaDecoder(BaseDecoder):
         super().__init__()
         
         self.meta_collection: Dict[int, Any] = {}  # Collection of meta events
-    
+
+        self.var_value = None  # Current varlen decoded value
+        self.var_byts = None  # Current byte that we are working with
+
     def load_default(self):
         """
         Loads the default meta-handlers.
@@ -589,6 +592,187 @@ class MetaDecoder(BaseDecoder):
         event = self.collection[bts[1]]
         
         # Check the legnth of the event:
+
+        length, num_read = self.read_varlen(bts)
+
+        # Check if our length is valid
+
+        assert length == len(bts[num_read+1:])
+
+        # Create and return the events:
+
+        return event(bts[num_read+1:])
+
+    def seq_decode(self, byte: bytes) -> Union[None, BaseEvent]:
+        """
+        Sequentially decodes the each byte given.
+
+
+
+        :param byte: [description]
+        :type byte: bytes
+        :return: [description]
+        :rtype: Union[None, BaseEvent]
+        """
+        return super().seq_decode(byte)
+
+    async def read_varlen(self, byts: byte) -> Tuple[int, int]:
+        """
+        Reads a varlen from the given bytes.
+
+        We return the actual value,
+        as well as the bytes read.
+
+        This method is great if you have a collection
+        of bytes and do not know where the varlen ends.
+        The bytes given should start with the varlen!
+        Anything else could cause trouble.
+
+        :param byts: Bytes to decode
+        :type byts: byte
+        :return: The value, number of bytes read
+        :rtype: int, int
+        """
+
+        # Set the value:
+
+        self.var_value = byts[0]
+        self.var_byts = self.var_value
+
+        index = 1
+
+        if self.var_value & 0x80:
+
+            # Initial value operation:
+
+            self.var_value &= 0x7F
+
+            # Iterate until completion:
+
+            while True:
+
+                val = self._low_read_varlen(byts[index])
+
+                if val:
+
+                    # Operation is complete, return:
+
+                    break
+
+                index += 1
+
+            # Return the result:
+
+        return byts, index
+
+    async def read_varlen_func(self, func: function, *args, **kwargs) -> Tuple[int, int]:
+        """
+        Reads bytes from a given function.
+
+        The given function should return a singe byte.
+        We will only call the function when necessary.
+
+        We will return the result,
+        as well as the number of bytes written.
+        We will pass all other arguments to the given function.
+
+        :param func: Function to call
+        :type func: function
+        :return: Result, Number of bytes read
+        :rtype: Tuple[int, int]
+        """
+
+        # Set the value:
+
+        self.var_value = func(*args, **kwargs)
+        self.var_byts = self.var_value
+
+        index = 1
+
+        if self.var_value & 0x80:
+
+            # Initial value operation:
+
+            self.var_value &= 0x7F
+
+            while True:
+
+                val = self._low_read_varlen(func(*args, **kwargs))
+
+                if val:
+
+                    # Operation is complete, return
+
+                    break
+
+                index += 1
+
+        # Return the result:
+
+        return self.var_value, index
+
+    async def _low_read_varlen(self, byt: bytes) -> Union[None, int]:
+        """
+        Reads a variable length intiger.
         
-        pass
+        We use the given byte in out calculations.
+        When more bytes are needed, we return None.
+        Once a value is found, then we return the intiger.
+
+        We save our necessary vairables in the var_value
+        and var_byt attributes.
+        It is important that you don't alter these values
+        or call this method twice!
+        This will seriously mess up the state of this decoder.
+        You can assume that this method is NOT thread safe.
         
+        This method is called automatically where appropriate.
+        In fact, this method really should not be called directly.
+
+        TODO: Fix this method and the write_varlen method!
+        This includes testing and documentation stuff.
+
+        :return: Intiger read
+        :rtype: int
+        """
+        
+        # Check if we need to continue:
+
+        if self.var_byts & 0x80:
+
+            # Do the operations:
+
+            self.var_byts = byt
+            self.var_value = (self.var_value << 7) + (self.var_byt & 0x7f)
+
+            # Not complete, keep going:
+
+            return None
+        
+        # Operation is complete, return the value:
+
+        return self.var_value
+        
+    async def write_varlen(self, num: int) -> bytes:
+        """
+        Converts an intiger into a collection of bytes.
+
+        We return the converted bytes after the operation is complete.
+
+        :param num: Number to encode
+        :type num: int
+        :return: Bytes of encoded data
+        :rtype: bytes
+        """
+        
+        buffer = num & 0x7F
+        
+        while True:
+            
+            if buffer & 0x80:
+                
+                buffer >>= 8
+            else:
+                break
+            
+        return buffer
