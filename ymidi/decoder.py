@@ -15,7 +15,7 @@ but you can use these standalone if you wish.
 import asyncio
 import struct
 
-from typing import Any, Union, Dict, Tuple
+from typing import Any, List, Union, Dict, Tuple
 
 from numpy import byte
 
@@ -518,7 +518,9 @@ class MetaDecoder(BaseDecoder):
         self.meta_collection: Dict[int, Any] = {}  # Collection of meta events
 
         self.var_value = None  # Current varlen decoded value
-        self.var_byts = None  # Current byte that we are working with
+        self.var_byts = []  # Current bytes that we are working with
+
+        self.meta_legnth = 0  # Length of the Meta event to decode 
 
     def load_default(self):
         """
@@ -532,7 +534,7 @@ class MetaDecoder(BaseDecoder):
             # Add each meta event:
             
             self.load_event(event)
-        
+
     def load_event(self, event: BaseEvent):
         """
         Loads the given event.
@@ -554,7 +556,7 @@ class MetaDecoder(BaseDecoder):
 
         # Check if the event is a meta event:
         
-        if event.statusmsg == MSG:
+        if event.statusmsg == META:
             
             # Valid meta event, load it:
             
@@ -565,7 +567,7 @@ class MetaDecoder(BaseDecoder):
             # Not a meta event, pass it along:
             
             super(BaseDecoder).load_event(event)
-    
+
     def decode(self, bts: bytes) -> BaseMetaMesage:
         """
         Decodes the given bytes into a Meta Event.
@@ -607,13 +609,36 @@ class MetaDecoder(BaseDecoder):
         """
         Sequentially decodes the each byte given.
 
-
+        TODO: Document this better
 
         :param byte: [description]
         :type byte: bytes
         :return: [description]
         :rtype: Union[None, BaseEvent]
         """
+
+        # Check if we are working with a valid status message:
+
+        if byte == META:
+
+            # Configure ourselves to decode a Meta event
+
+            self.var_byts.append[byte]
+
+            return
+
+        if self.var_byts:
+
+            # We are working with a Meta Event, do something about it:
+
+            length = len(self.var_byts)
+
+            if length == 1:
+
+                # Read the length:
+
+                self.meta_legnth = self.read_varlen_func()
+
         return super().seq_decode(byte)
 
     async def read_varlen(self, byts: byte) -> Tuple[int, int]:
@@ -711,6 +736,35 @@ class MetaDecoder(BaseDecoder):
 
         return self.var_value, index
 
+    async def read_varlen(self, source: List) -> Tuple[int, int]:
+        """
+        Reads a varlen from a list-like source.
+
+        We will traverse this list-like-object one
+        byte at a time until we reach it's end
+        (Or until we find a valid var-len).
+
+        This function will keep the state of the decoding
+        saved in this decoder,
+        so if the given object does not contain a var-len,
+        then we will (hopefully) catch it next time this function is called.
+
+        This function is designed for lists, but any object
+        that implements list indexing will be able to be used by this function.
+        EACH INDEX OPERATION SHOULD RETURN ONE BYTE!!!
+
+        You can use this function to decode varlens a byte at a time,
+        or to read from an object until we encounter a valid varlen.
+
+        We will return the result,
+        as well as the number of bytes read.
+
+        :param source: Source to read bytes from
+        :type source: List
+        :return: Final value and number of bytes read
+        :rtype: Tuple[int, int]
+        """
+
     async def _low_read_varlen(self, byt: bytes) -> Union[None, int]:
         """
         Reads a variable length intiger.
@@ -752,7 +806,7 @@ class MetaDecoder(BaseDecoder):
         # Operation is complete, return the value:
 
         return self.var_value
-        
+ 
     async def write_varlen(self, num: int) -> bytes:
         """
         Converts an intiger into a collection of bytes.
