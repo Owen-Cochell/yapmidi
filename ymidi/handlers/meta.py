@@ -11,6 +11,7 @@ Controller mapper
 NoteOn optimizations(Opposite of OntoOff)
 General MIDI setup?
 Sys exc. adder?
+Arpegiator and other musical enhancements?
 """
 
 import asyncio

@@ -112,6 +112,7 @@ class MIDIFile(BaseIO):
 
         If the buffer value is 0, then we will return exactly one event.
         If the buffer value is -1, then we will load ALL midi events that we can.
+        Otherwise, we ensure that the buffer is filled up to the given number.
         """
 
         while self.buffer < len(self.collection) + 1:
@@ -245,13 +246,13 @@ class MIDIFile(BaseIO):
     async def read_varlen(self) -> int:
         """
         Reads a variable length intiger.
-        
+
         We pull values directly from the protocol object,
         so it is important to call this method where relevant!
         If you call this method, say, in the middle of an event,
         then you will likely loose the MIDI event,
         and this method will likely fail.
-        
+
         This method is called automatically where appropriate.
 
         TODO: Fix this method and the write_varlen method!

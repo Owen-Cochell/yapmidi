@@ -7,7 +7,6 @@ such as start of files and tracks, and end of MIDI files.
 ALL builtin events have negative status messages.
 """
 
-from operator import length_hint
 from ymidi.events.base import BaseEvent
 
 

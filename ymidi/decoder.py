@@ -12,12 +12,9 @@ These classes are usually used by IO classes,
 but you can use these standalone if you wish.
 """
 
-import asyncio
 import struct
 
 from typing import Any, List, Union, Dict, Tuple
-
-from numpy import byte
 
 from ymidi.events.base import BaseEvent, BaseMetaMesage
 from ymidi.events.voice import VOICE_EVENTS
@@ -509,7 +506,7 @@ class MetaDecoder(BaseDecoder):
     
     This encoder is modular, similar to the ModularDecoder,
     which allows custom meta events to be registered and loaded for proper decoding.
-    We inherit the BaseDecoder, and use it to decode any non-meta events.
+    We inherit the ModularDecoder, and use it to decode any non-meta events.
     """
     
     def __init__(self) -> None:
@@ -517,10 +514,39 @@ class MetaDecoder(BaseDecoder):
         
         self.meta_collection: Dict[int, Any] = {}  # Collection of meta events
 
-        self.var_value = None  # Current varlen decoded value
-        self.var_byts = []  # Current bytes that we are working with
+        # --== Context Values: ==--
+        # These values should NOT be access or changed at any point,
+        # As the varlen/sequential decoder relies on these variables!
 
-        self.meta_legnth = 0  # Length of the Meta event to decode 
+        self.var_value = None  # Current varlen decoded value
+        self.var_byt = None  # Current bytes that we are working with
+        self.var_index = 0  # Number of bytes we have read in varlen decoding
+
+        self.meta_decode = False  # Value determining if we are in the process of decoding a meta event
+        self.meta_legnth = 0  # Length of the Meta event to decode
+        self.meta_byts = []  # Collection of all meta bytes we are working with
+        self.meta_type = None  # Meta type we are working with
+
+    def reset(self):
+        """
+        Resets this decoder back to it's initial state.
+        
+        This is useful for recovering from a botched decoding job.
+        
+        This method is called automatically after each sequential
+        decoding operation, but it can be called manually when necessary.
+        """
+        
+        # Reset the context variables:
+        
+        self.var_value = None
+        self.var_byt = None
+        self.var_index = 0
+        
+        self.meta_decode = False
+        self.meta_legnth = False
+        self.meta_byts = False
+        self.meta_type = False
 
     def load_default(self):
         """
@@ -595,7 +621,7 @@ class MetaDecoder(BaseDecoder):
         
         # Check the legnth of the event:
 
-        length, num_read = self.read_varlen(bts)
+        length, num_read = self.read_varlen(bts[2:])
 
         # Check if our length is valid
 
@@ -609,11 +635,16 @@ class MetaDecoder(BaseDecoder):
         """
         Sequentially decodes the each byte given.
 
-        TODO: Document this better
+        This method expects a single byte at a time!
+        This process of decoding can be useful if 
+        you are unsure where events will lie in a given stream.
 
-        :param byte: [description]
+        This method will return an event if we have enough data.
+        Otherwise, we will return None if more data is needed.
+
+        :param byte: A single byte to
         :type byte: bytes
-        :return: [description]
+        :return: BaseEvent or None if more data is needed
         :rtype: Union[None, BaseEvent]
         """
 
@@ -623,124 +654,63 @@ class MetaDecoder(BaseDecoder):
 
             # Configure ourselves to decode a Meta event
 
-            self.var_byts.append[byte]
+            self.meta_decode = True
 
             return
 
-        if self.var_byts:
+        if self.meta_decode:
 
             # We are working with a Meta Event, do something about it:
 
-            length = len(self.var_byts)
+            if not self.meta_type:
+                
+                # No event type specified, current byte should be it:
+                
+                self.meta_type = byte
+                
+                return None
 
-            if length == 1:
+            if not self.meta_legnth:
 
-                # Read the length:
+                # No meta length specified, current byte should be it:
 
-                self.meta_legnth = self.read_varlen_func()
+                res = self.read_varlen_func([byte])
+                
+                if res:
+                    
+                    # Got our value! Set it...
 
-        return super().seq_decode(byte)
+                    self.meta_legnth = res
 
-    async def read_varlen(self, byts: byte) -> Tuple[int, int]:
-        """
-        Reads a varlen from the given bytes.
+            else:
+            
+                # Append the byte to the list:
 
-        We return the actual value,
-        as well as the bytes read.
+                self.meta_byts.append(byte)
 
-        This method is great if you have a collection
-        of bytes and do not know where the varlen ends.
-        The bytes given should start with the varlen!
-        Anything else could cause trouble.
+            if len(self.meta_byts) == self.meta_legnth:
+                
+                # We are done! Create the object and reset:
+                
+                event = self.meta_collection[self.meta_type](*self.meta_byts)
 
-        :param byts: Bytes to decode
-        :type byts: byte
-        :return: The value, number of bytes read
-        :rtype: int, int
-        """
+                self.reset()
+                
+                return event
 
-        # Set the value:
+            # More data is needed, return None
+            
+            return None
 
-        self.var_value = byts[0]
-        self.var_byts = self.var_value
+        # Otherwise, pass this data along:
 
-        index = 1
+        return super(ModularDecoder).seq_decode(byte)
 
-        if self.var_value & 0x80:
-
-            # Initial value operation:
-
-            self.var_value &= 0x7F
-
-            # Iterate until completion:
-
-            while True:
-
-                val = self._low_read_varlen(byts[index])
-
-                if val:
-
-                    # Operation is complete, return:
-
-                    break
-
-                index += 1
-
-            # Return the result:
-
-        return byts, index
-
-    async def read_varlen_func(self, func: function, *args, **kwargs) -> Tuple[int, int]:
-        """
-        Reads bytes from a given function.
-
-        The given function should return a singe byte.
-        We will only call the function when necessary.
-
-        We will return the result,
-        as well as the number of bytes written.
-        We will pass all other arguments to the given function.
-
-        :param func: Function to call
-        :type func: function
-        :return: Result, Number of bytes read
-        :rtype: Tuple[int, int]
-        """
-
-        # Set the value:
-
-        self.var_value = func(*args, **kwargs)
-        self.var_byts = self.var_value
-
-        index = 1
-
-        if self.var_value & 0x80:
-
-            # Initial value operation:
-
-            self.var_value &= 0x7F
-
-            while True:
-
-                val = self._low_read_varlen(func(*args, **kwargs))
-
-                if val:
-
-                    # Operation is complete, return
-
-                    break
-
-                index += 1
-
-        # Return the result:
-
-        return self.var_value, index
-
-    async def read_varlen(self, source: List) -> Tuple[int, int]:
+    def read_varlen(self, source: List) -> Tuple[int, int]:
         """
         Reads a varlen from a list-like source.
 
-        We will traverse this list-like-object one
+        We will traverse this iterable one
         byte at a time until we reach it's end
         (Or until we find a valid var-len).
 
@@ -749,15 +719,21 @@ class MetaDecoder(BaseDecoder):
         so if the given object does not contain a var-len,
         then we will (hopefully) catch it next time this function is called.
 
-        This function is designed for lists, but any object
-        that implements list indexing will be able to be used by this function.
-        EACH INDEX OPERATION SHOULD RETURN ONE BYTE!!!
+        This function is deigned for iterables,
+        so any object implementing the '__next__()' 
+        dunder method can be used here.
+        This includes iterables like lists and tuples,
+        as well as protocol objects,
+        as they also implement the '__next__()' dunder method.
+        Do note, these protocol objects MUST be started if they are to be used!
 
         You can use this function to decode varlens a byte at a time,
         or to read from an object until we encounter a valid varlen.
 
         We will return the result,
         as well as the number of bytes read.
+        If we need more info to continue,
+        then we simply return None.
 
         :param source: Source to read bytes from
         :type source: List
@@ -765,47 +741,59 @@ class MetaDecoder(BaseDecoder):
         :rtype: Tuple[int, int]
         """
 
-    async def _low_read_varlen(self, byt: bytes) -> Union[None, int]:
-        """
-        Reads a variable length intiger.
-        
-        We use the given byte in out calculations.
-        When more bytes are needed, we return None.
-        Once a value is found, then we return the intiger.
+        # Iterate as far as we can:
 
-        We save our necessary vairables in the var_value
-        and var_byt attributes.
-        It is important that you don't alter these values
-        or call this method twice!
-        This will seriously mess up the state of this decoder.
-        You can assume that this method is NOT thread safe.
-        
-        This method is called automatically where appropriate.
-        In fact, this method really should not be called directly.
+        for byt in source:
 
-        TODO: Fix this method and the write_varlen method!
-        This includes testing and documentation stuff.
+            # Check if we are working with the first value:
 
-        :return: Intiger read
-        :rtype: int
-        """
-        
-        # Check if we need to continue:
+            if not self.var_byt:
 
-        if self.var_byts & 0x80:
+                # Check if we have more to read:
 
-            # Do the operations:
+                if byt & 0x80:
 
-            self.var_byts = byt
+                    # Setup our variables to read more data:
+                    
+                    self.var_value = byt
+                    self.var_byt = self.var_value
+
+                    # Initial value operation:
+
+                    self.var_value &= 0x7F
+
+                    self.var_index = 1
+                    
+                    continue
+                
+                # We are done, return the value:
+                
+                return byt, 1
+
+            # Increment our index:
+
+            self.var_index += 1
+
+            # Do the byte operation:
+
+            self.var_byt = byt
             self.var_value = (self.var_value << 7) + (self.var_byt & 0x7f)
 
-            # Not complete, keep going:
+            if self.var_byt & 0x80:
 
-            return None
-        
-        # Operation is complete, return the value:
+                # Not complete, keep going:
 
-        return self.var_value
+                continue
+
+            # Operation is complete, return:
+
+            self.var_byt = None
+
+            return self.var_value, self.var_index
+
+        # More values needed, return None:
+
+        return None
  
     async def write_varlen(self, num: int) -> bytes:
         """
