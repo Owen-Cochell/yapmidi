@@ -7,8 +7,8 @@ We support reading MIDI data from an given protocol.
 import asyncio
 
 from ymidi.io.base import BaseIO
-from ymidi.protocol import BaseProtocol
-from ymidi.decoder import ModularDecoder
+from ymidi.protocol import BaseProtocol, FileProtocol
+from ymidi.decoder import MetaDecoder
 from ymidi.events.base import BaseEvent
 from ymidi.events.builtin import StartPattern, StartTrack, StopPattern
 from ymidi.constants import META, TRACK_END
@@ -35,7 +35,7 @@ class MIDIFile(BaseIO):
     Otherwise, if the buffer is -1,
     then ALL events will be loaded at start time.
     
-    Do note, this IO module only support sequential event loading.
+    Do note, this IO module only supports sequential event loading.
     This means that we load events in the order that they occur.
     If this is a type 0 file, then nothing should change here,
     as the events are in the order they are meant to be handled.
@@ -52,9 +52,17 @@ class MIDIFile(BaseIO):
 
     NAME = "MIDIFile"
 
-    def __init__(self, path:str='', buffer: int=-1, name: str='') -> None:
+    def __init__(self, path: str=None, buffer: int=-1, name: str='', load_default: bool=True) -> None:
 
-        super().__init__(BaseProtocol(), ModularDecoder(), name=name)
+        proto = BaseProtocol()
+
+        if path:
+
+            # Crete a file protocol object:
+
+            proto = FileProtocol(path)
+
+        super().__init__(proto, MetaDecoder(), name=name)
 
         self.buffer = buffer  # Number of events to have loaded at one time
         self.collection = []  # Collection of objects
@@ -63,9 +71,16 @@ class MIDIFile(BaseIO):
         self.write_check = False  # Boolean determining if the write test passed
 
         self.num_tracks = 0  # Number of tracks present
+        self.num_processed = 0  # Number of tracks processed
 
-        self.next_operation = self.read_file_header
         self.next_event_track = True  # Boolean determining if the next event is a track header
+        self.finished_processing = False  # Boolean determining if we are done processing
+
+        # Determine if we should load the default events:
+
+        if load_default:
+
+            self.decoder.load_default()
 
     async def start(self):
         """
@@ -115,7 +130,7 @@ class MIDIFile(BaseIO):
         Otherwise, we ensure that the buffer is filled up to the given number.
         """
 
-        while self.buffer < len(self.collection) + 1:
+        while self.buffer < len(self.collection) + 1 and not self.finished_processing:
 
             # Determine if we should read the track header:
 
@@ -139,6 +154,16 @@ class MIDIFile(BaseIO):
                 # This track is over, make this known:
 
                 self.next_event_track = True
+                self.num_processed += 1
+
+                # Determine if we are done processing the file:
+
+                if self.num_tracks == self.num_processed:
+
+                    # We are done processing, stop and return:
+
+                    self.collection.append(StopPattern())
+                    self.finished_processing = True
 
     async def read_track_header(self) -> StartTrack:
         """
@@ -224,14 +249,13 @@ class MIDIFile(BaseIO):
         
         # Read the delta time:
 
-        delta = await self.read_varlen()
+        delta = self.decoder.read_varlen(self.proto)
 
         res = False
         
         while not res:
             
             # Get the result from the decoder:
-            # TODO: Fix this decoder to support meta events and special sys-exc events
 
             res = self.decoder.seq_decode(await self.proto.get(1))
         
@@ -242,65 +266,3 @@ class MIDIFile(BaseIO):
         # Finally, return the MIDI event:
 
         return res
-
-    async def read_varlen(self) -> int:
-        """
-        Reads a variable length intiger.
-
-        We pull values directly from the protocol object,
-        so it is important to call this method where relevant!
-        If you call this method, say, in the middle of an event,
-        then you will likely loose the MIDI event,
-        and this method will likely fail.
-
-        This method is called automatically where appropriate.
-
-        TODO: Fix this method and the write_varlen method!
-        This includes testing and documentation stuff.
-
-        :return: Intiger read
-        :rtype: int
-        """
-        
-        # Read the initial byte:
-        
-        value = await self.proto.get(1)
-        byt = value
-        
-        if value & 0x80:
-            
-            value &= 0x7f
-            
-            while byt & 0x80:
-                
-                byt = await self.proto.get(1)
-                
-                value = (value << 7) + (byt & 0x7f)
-                
-            # Return the final value:
-            
-            return value
-
-    async def write_varlen(self, num: int) -> bytes:
-        """
-        Converts an intiger into a collection of bytes.
-        
-        We return the converted bytes after the operation is complete.
-
-        :param num: Number to encode
-        :type num: int
-        :return: Bytes of encoded data
-        :rtype: bytes
-        """
-        
-        buffer = num & 0x7F
-        
-        while True:
-            
-            if buffer & 0x80:
-                
-                buffer >>= 8
-            else:
-                break
-            
-        return buffer

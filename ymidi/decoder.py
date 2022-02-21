@@ -22,7 +22,7 @@ from ymidi.events.system.realtime import REALTIME_EVENTS
 from ymidi.events.system.common import SYSTEM_COMMON_EVENTS
 from ymidi.events.system.system_exc import SYSTEM_EXCLUSIVE_EVENTS
 from ymidi.events.meta import META_EVENTS
-from ymidi.constants import META
+from ymidi.constants import META, SYSTEM_EXCLUSIVE, EOX
 
 
 class BaseDecoder(object):
@@ -508,7 +508,7 @@ class MetaDecoder(BaseDecoder):
     which allows custom meta events to be registered and loaded for proper decoding.
     We inherit the ModularDecoder, and use it to decode any non-meta events.
     """
-    
+
     def __init__(self) -> None:
         super().__init__()
         
@@ -530,9 +530,9 @@ class MetaDecoder(BaseDecoder):
     def reset(self):
         """
         Resets this decoder back to it's initial state.
-        
+
         This is useful for recovering from a botched decoding job.
-        
+
         This method is called automatically after each sequential
         decoding operation, but it can be called manually when necessary.
         """
@@ -561,6 +561,10 @@ class MetaDecoder(BaseDecoder):
             
             self.load_event(event)
 
+        # Also, load the default events in the ModularDecoder:
+
+        super(ModularDecoder).load_default()
+
     def load_event(self, event: BaseEvent):
         """
         Loads the given event.
@@ -578,15 +582,24 @@ class MetaDecoder(BaseDecoder):
 
             # Not a valid event, raise an exception!
 
-            raise ValueError("Event does not inherit BaseEvent!")
+            raise ValueError("Event {} does not inherit BaseEvent!".format(event))
 
         # Check if the event is a meta event:
         
-        if event.statusmsg == META:
+        if event.statusmsg is META:
             
             # Valid meta event, load it:
             
             self.meta_collection[event.type] = event
+
+            return
+
+        elif event.statusmsg in (SYSTEM_EXCLUSIVE, EOX):
+
+            # Load the system exclusive event:
+
+            self.meta_collection[SYSTEM_EXCLUSIVE] = event
+            self.meta_collection[EOX] = event
             
         else:
             
@@ -609,7 +622,7 @@ class MetaDecoder(BaseDecoder):
 
         # Check if the first byte is a valid status message
 
-        if bts[0] is not META:
+        if bts[0] not in (META, SYSTEM_EXCLUSIVE, EOX):
             
             # Not a meta event, pass it along:
             
@@ -617,8 +630,16 @@ class MetaDecoder(BaseDecoder):
         
         # Get the event instance to work with:
         
-        event = self.collection[bts[1]]
-        
+        if bts[0] == META:
+
+            event = self.meta_collection[bts[1]]
+
+        else:
+
+            # System exclusive event:
+
+            event = self.meta_collection[bts[0]]
+
         # Check the legnth of the event:
 
         length, num_read = self.read_varlen(bts[2:])
@@ -650,13 +671,19 @@ class MetaDecoder(BaseDecoder):
 
         # Check if we are working with a valid status message:
 
-        if byte == META:
+        if byte in (META, SYSTEM_EXCLUSIVE, EOX):
 
             # Configure ourselves to decode a Meta event
 
             self.meta_decode = True
 
-            return
+            if byte in (SYSTEM_EXCLUSIVE, EOX):
+
+                # Optimise for system exclusive events:
+
+                self.meta_type = byte
+
+            return None
 
         if self.meta_decode:
 
@@ -795,7 +822,7 @@ class MetaDecoder(BaseDecoder):
 
         return None
  
-    async def write_varlen(self, num: int) -> bytes:
+    def write_varlen(self, num: int) -> bytes:
         """
         Converts an intiger into a collection of bytes.
 

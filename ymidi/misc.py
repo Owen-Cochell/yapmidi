@@ -226,7 +226,7 @@ class ModuleCollection(object):
 
             # Invalid module!
 
-            raise TypeError("Invalid module! MUST inherit {}}!".format(self.module_type))
+            raise TypeError("Invalid module! MUST inherit {}!".format(self.module_type))
 
         # Attach ourselves to the module:
 

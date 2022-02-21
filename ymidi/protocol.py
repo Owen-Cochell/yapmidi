@@ -7,6 +7,8 @@ Protocol objects have NO understanding of the MIDI specifications,
 and only used to get data for the high level components.
 """
 
+from __future__ import annotations
+
 import asyncio
 
 
@@ -48,6 +50,40 @@ class BaseProtocol(object):
 
         pass
 
+    def sync_read(self, byts: int) -> bytes:
+        """
+        A synchronous implementation of this protocol object.
+
+        By default, we simply run the coroutene in the event loop,
+        so we get a synchronous-like adaptation.
+        Protocol objects can overide this method and implement
+        their own functionality that may be faster then the default.
+
+        :param byts: Number of bytes to read
+        :type byts: int
+        :return: Bytes read
+        :rtype: bytes
+        """
+
+        return asyncio.get_event_loop().run_until_complete(self.read(byts))
+
+    def sync_write(self, byts: bytes) -> int:
+        """
+        A synchronous implementation of this protocol object.
+
+        By default, we simply run the coroutene in the event,
+        so we get a synchronous-like adaptation.
+        Protocol objects can overide this method and implement
+        their own functionality that may be faster than the default.
+
+        :param bytes: Bytes to write
+        :type bytes: bytes
+        :return: Number of bytes written
+        :rtype: int
+        """
+
+        return asyncio.get_event_loop().run_until_complete(self.write(byts))
+
     def start(self):
         """
         Starts this Protocol object.
@@ -67,6 +103,29 @@ class BaseProtocol(object):
         """
         
         pass
+
+    def __iter__(self) -> BaseProtocol:
+        """
+        Retruns this object for iteration.
+
+        :return: This object
+        :rtype: BaseProtocol
+        """
+
+        return self
+
+    def __next__(self) -> bytes:
+        """
+        Returns the next byte to be read.
+
+        Because for loops are synchronous,
+        we call the synchronous read method.
+
+        :return: Byte read
+        :rtype: bytes
+        """
+
+        return self.sync_read(1)
 
 
 class FileProtocol(BaseProtocol):
@@ -123,4 +182,32 @@ class FileProtocol(BaseProtocol):
         :rtype: int
         """
 
-        return await asyncio.to_thread(self.opener, byts)
+        return await asyncio.to_thread(self.opener.write, byts)
+
+    def sync_read(self, byts: int) -> bytes:
+        """
+        Reads the given bytes from a file synchronously.
+
+        :param byts: Bytes to read
+        :type byts: int
+        :return: Bytes read
+        :rtype: bytes
+        """
+
+        # Read from file and return:
+
+        return self.opener.read(byts)
+
+    def sync_write(self, byts: bytes) -> int:
+        """
+        Writes the given bytes to a file synchronously.
+
+        :param byts: Bytes to write
+        :type byts: bytes
+        :return: Number of bytes written
+        :rtype: int
+        """
+
+        # Write to file and return:
+
+        return self.opener.write(byts)
