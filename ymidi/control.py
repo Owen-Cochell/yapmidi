@@ -51,7 +51,7 @@ class Controller(list):
     TODO: Add example here
 
     We have no understanding of controller mappings!
-    Users should rely on some high-level tool or contants
+    Users should rely on some high-level tool or constants
     to find meaning in controller numbers.
 
     Usually, each channel has their own controllers to work with,
@@ -66,7 +66,7 @@ class Controller(list):
         
         super(list).__init__()
 
-        self._control = []  # List contaning controller values and LSB mappings
+        self._control = []  # List containing controller values and LSB mappings
         self.num = num  # Number of controllers
 
         self.reset()

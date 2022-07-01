@@ -14,7 +14,7 @@ class SongPositionPointer(SystemCommon):
     """
     Event representing a SongPositionPointer message.
 
-    This event is used to jump to a postion in a song,
+    This event is used to jump to a position in a song,
     which is usually a collection of MIDI events to be played back.
     A 'Song Position' is the number of MIDI beats (1 beat = 6 MIDI clocks)
     that have elapsed from the start of the song.

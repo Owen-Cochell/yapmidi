@@ -14,7 +14,7 @@ class StartPattern(BaseEvent):
     """
     StartPattern - Represents the start of a MIDI pattern,
     which is a collection of tracks.
-    This builtin event is usually generated when MIDI info is being playedback.
+    This builtin event is usually generated when MIDI info is being played back.
     For example, MIDI file IO modules will generate these events.
 
     This event contains info about the given pattern,
@@ -24,13 +24,13 @@ class StartPattern(BaseEvent):
     name: str = "StartPattern"
     statusmsg: int = -1
 
-    def __init__(self, legnth, format, track_num, divisions) -> None:
+    def __init__(self, length, format, num_tracks, divisions) -> None:
 
-        super().__init__(legnth, format, track_num, divisions)
+        super().__init__(length, format, num_tracks, divisions)
 
-        self.length = legnth  # Length of the pattern header
+        self.length = length  # Length of the pattern header
         self.format = format  # Format of this pattern
-        self.track_num = track_num  # Number of tracks in this pattern
+        self.num_tracks = num_tracks  # Number of tracks in this pattern
         self.divisions = divisions  # Divisions of this pattern
 
 
@@ -50,7 +50,7 @@ class StartTrack(BaseEvent):
         super().__init__(chunk_type, length)
 
         self.chunk_type = chunk_type  # Type of track this is
-        self.length = length  # Legnth of this track
+        self.length = length  # Length of this track
 
 
 class StopPattern(BaseEvent):
@@ -62,3 +62,53 @@ class StopPattern(BaseEvent):
 
     name: str = "StopPattern"
     statusmsg: int = -3
+
+
+class UnknownMetaEvent(BaseEvent):
+    """
+    UnknownMetaEvent - A meta event that we do not know about.
+    
+    We keep the event data and type for inspection.
+    We keep track of these events for debugging purposes,
+    instead of silently trashing them.
+    
+    You probably should not attempt to work with these events
+    unless you know what you are looking for!
+    """
+    
+    name: str = "UnknownMetaEvent"
+    statusmsg: int = -4
+
+    def __init__(self, status, *args) -> None:
+        super().__init__(*args)
+        
+        self.statusmsg = status  # Status message of the unknown event
+
+
+class UnknownEvent(BaseEvent):
+    """
+    UnknownMetaEvent - An event that we do not know about.
+
+    We keep the event data and type for inspection.
+    We keep track of these events for debugging purposes,
+    instead of silently trashing them.
+
+    You probably should not attempt to work with these events
+    unless you know what you are looking for!
+
+    Because MIDI events can take advantage of running status,
+    two unknown events may be present!
+    The default decoder(ModularDecoder) determines that an unknown event is complete once 
+    another status message is encountered.
+    This means that if two unknown events utilize running status,
+    then we will not encounter a status message,
+    and will put the data of both into one UnknownEvent instance.
+    """
+
+    name: str = "UnknownEvent"
+    statusmsg: int = -5
+
+    def __init__(self, status, *args) -> None:
+        super().__init__(*args)
+
+        self.statusmsg = status  # Status message of the unknown event

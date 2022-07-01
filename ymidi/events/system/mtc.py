@@ -1,7 +1,7 @@
 """
 This file contains classes that work with MIDI Time Code(MTC) events.
 MTC events are used to synchronize the time between two devices.
-These events are rarely used in the context of musical prefromance,
+These events are rarely used in the context of musical performance,
 and many users will simply ignore them.
 """
 

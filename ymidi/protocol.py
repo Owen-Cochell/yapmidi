@@ -54,9 +54,9 @@ class BaseProtocol(object):
         """
         A synchronous implementation of this protocol object.
 
-        By default, we simply run the coroutene in the event loop,
+        By default, we simply run the coroutine in the event loop,
         so we get a synchronous-like adaptation.
-        Protocol objects can overide this method and implement
+        Protocol objects can override this method and implement
         their own functionality that may be faster then the default.
 
         :param byts: Number of bytes to read
@@ -71,9 +71,9 @@ class BaseProtocol(object):
         """
         A synchronous implementation of this protocol object.
 
-        By default, we simply run the coroutene in the event,
+        By default, we simply run the coroutine in the event,
         so we get a synchronous-like adaptation.
-        Protocol objects can overide this method and implement
+        Protocol objects can override this method and implement
         their own functionality that may be faster than the default.
 
         :param bytes: Bytes to write
@@ -106,7 +106,7 @@ class BaseProtocol(object):
 
     def __iter__(self) -> BaseProtocol:
         """
-        Retruns this object for iteration.
+        Returns this object for iteration.
 
         :return: This object
         :rtype: BaseProtocol
@@ -133,7 +133,7 @@ class FileProtocol(BaseProtocol):
     FileProtocol - Reads data from a file on the operating system.
 
     Because file operations are NOT asynchronous,
-    use utilise executers to emulate asynchronous activity.
+    we utilize executers to emulate asynchronous activity.
 
     We read bytes by default. Users can open the file in write mode
     by passing True to the 'write' parameter.

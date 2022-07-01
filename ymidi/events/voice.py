@@ -84,7 +84,7 @@ class ProgramChange(ChannelVoiceMessage):
     Represents a ProgramChange event.
     These events allow for a program change in a given channel,
     usually a change in instrument.
-    The program is represented as an intiger(0-127).
+    The program is represented as an integer(0-127).
     When encountered, the program of the channel should change.
     """
 

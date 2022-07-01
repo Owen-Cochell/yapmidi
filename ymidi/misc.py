@@ -5,8 +5,119 @@ Miscellaneous components used by yap-midi.
 import asyncio
 
 from typing import Any
+from time import perf_counter_ns
 
-from ymidi.errors import ModuleLoadException,  ModuleStartException, ModuleStopException, ModuleUnloadException
+from ymidi.errors import ModuleLoadException, ModuleStartException, ModuleStopException, ModuleUnloadException
+
+# Function that yapmidi uses to get time:
+
+ytime = perf_counter_ns
+
+
+def write_varlen(num: int) -> bytes:
+    """
+    Converts an integer into a collection of bytes.
+
+    We return the converted bytes after the operation is complete.
+
+    :param num: Number to encode
+    :type num: int
+    :return: Bytes of encoded data
+    :rtype: bytes
+    """
+                
+    bytes = []
+        
+    while num:
+                        
+        bytes.append(num & 0x7f)
+            
+        num >>= 7
+
+    if bytes:
+            
+        bytes.reverse()
+            
+        for i in range(len(bytes) - 1):
+                
+            bytes[i] |= 0x80
+                
+        return bytes
+
+    return [0]
+
+
+def de_to_ms(self, delta: int, division: int, mpb: int) -> int:
+    """
+    Converts the given delta time into microseconds.
+
+    We require the byte division and tempo in microseconds per beat(MPB) note for this operation.
+
+    :param delta: Delta time to convert
+    :type delta: int
+    :param division: Division of the delta time
+    :type division: int
+    :param tempo : Temp in MPB
+    :return: Time in milliseconds
+    :rtype: int
+    """
+    
+    return delta * (mpb / division)
+
+
+def ms_to_de(milli: int, division: int, tempo: int) -> int:
+    """
+    Converts the given microseconds into delta time.
+    
+    We require the byte division and tempo in milliseconds per beat(MPB) for this operation.
+
+    :param milli: Millisecond time to convert
+    :type milli: int
+    :param division: Division of delta time
+    :type division: int
+    :param tempo: Temp in MPB
+    :type tempo: int
+    :return: Time in delta time(or number of ticks)
+    :rtype: int
+    """
+
+    return (milli * division) / tempo
+
+
+def mpb_to_bpm(mpq: int, denom: int=4) -> int:
+    """
+    Converts the microseconds per beat into beats per minute(BPM).
+
+    We optionally require the denominator of the time signature.
+    Because most of the time this is 4, we default to 4.
+
+    :param mpq: Microseconds per beat
+    :type mpq: int
+    :param denom: Time signature denominator
+    :type denom: int
+    :return: Tempo in BPM
+    :rtype: int
+    """
+
+    return (60000000 / mpq) * (denom/4)
+
+
+def bpm_to_mpb(bpm: int, denom: int=4) -> int:
+    """
+    Converts Beats Per Minute(BPM) to milliseconds per beat(MPB).
+
+    We optionally require the denominator of the time signature.
+    Because most of the time this is 4, we default to 4.
+
+    :param bpm: BPM
+    :type bpm: int
+    :param denom: Time signature denominator, defaults to 4
+    :type denom: int, optional
+    :return: Milliseconds per beat
+    :rtype: int
+    """
+
+    return (60000000 * denom) / (4 * bpm)
 
 
 class BaseModule(object):
@@ -154,7 +265,7 @@ class ModuleCollection(object):
     We implement list-like features,
     allowing users to iterate over the loaded modules
     and manipulate them.
-    Keep in mind, the structure responsable for housing these modules is a tuple.
+    Keep in mind, the structure responsible for housing these modules is a tuple.
     This means that with each change,
     an entirely new tuple must be created.
     The tuple format allows for a low memory footprint,
@@ -185,7 +296,7 @@ class ModuleCollection(object):
     """
 
     def __init__(self, event_loop=None, module_type=None) -> None:
-        
+
         # Module storage component
         self.modules = ()
         # Event loop in use. if not provided, then one will be created
@@ -196,7 +307,7 @@ class ModuleCollection(object):
         self.running = False  # Value determining if we are running
         self.num_loaded = 0  # Number of modules currently loaded
         self.max_loaded = 0  # Max number of modules loaded
-    
+
     def load_module(self, module: BaseModule) -> BaseModule:
         """
         Adds the given module to the collection.
@@ -418,7 +529,7 @@ class ModuleCollection(object):
         Method used to start this ModuleCollection.
 
         We set our running status,
-        and submits the run() coroutene to the event loop.
+        and submits the run() coroutine to the event loop.
 
         This method is designed to be ran from asynchronous code,
         usually the TODO: Put masterclass name here
@@ -431,7 +542,7 @@ class ModuleCollection(object):
         # Set our runing status:
 
         self.running = True
-        
+
     async def stop(self):
         """
         Method used to stop this ModuleCollection.

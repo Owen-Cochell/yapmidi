@@ -2,7 +2,7 @@
 This file contains system real time events.
 System real time events are used to synchronize 
 clock-based MIDI equipment.
-These events serve as uniform timeing information
+These events serve as uniform timing information
 and do not have channel numbers.
 
 These events are only to be used when in MIDI SYNC mode!

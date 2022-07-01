@@ -85,6 +85,22 @@ class BaseIO(BaseModule):
         
         self.proto.stop()
 
+    def has_events() -> bool:
+        """
+        Determines if there are any more events to return.
+        
+        This operation can greatly differ depending on the Io module,
+        so the dirty details are left up to the child class.
+        
+        This should return True if there are more events to return,
+        and False if there are no more events to return.
+
+        :return: Boolean determining if there are events to return
+        :rtype: bool
+        """
+        
+        raise NotImplementedError("Must be overridden in child class!")
+
 
 class NullIO(BaseIO):
     """
@@ -117,6 +133,17 @@ class NullIO(BaseIO):
 
         pass
 
+    def has_events() -> bool:
+        """
+        Because we will never return anything,
+        we always return False.
+
+        :return: Always returns False
+        :rtype: bool
+        """
+
+        return False
+
 
 class EchoIO(BaseIO):
     """
@@ -139,7 +166,7 @@ class EchoIO(BaseIO):
         :return: Event from queue
         :rtype: BaseEvent
         """
-        
+
         return await self.queue.get()
 
     async def put(self, event: BaseEvent):
@@ -157,7 +184,7 @@ class IOCollection(ModuleCollection):
     """
     IOCollection - Manages IO modules!
 
-    This class manages, organises, and works with IO modules.
+    This class manages, organizes, and works with IO modules.
     We allow for the registration of multiple IO modules,
     and await them all asynchronously.
     This allows for MIDI data to come from many sources at once!
@@ -181,7 +208,7 @@ class IOCollection(ModuleCollection):
     This allows for events to accumulate until they are needed,
     and for code to block until an event is encountered.
     This queue can be manipulated with our methods.
-    Advanced compontens will bypass these methods and access the queue directly.
+    Advanced components will bypass these methods and access the queue directly.
 
     TODO: Check out this list!
     - Implement better queue entry points
@@ -248,7 +275,7 @@ class IOCollection(ModuleCollection):
 
         This allows for Non-asynchronous code to interact with the IO queue.
 
-        Like sync_get(), we utilise the event loop to run the async code.
+        Like sync_get(), we utilize the event loop to run the async code.
 
         :param event: BaseEvent object to add to the queue
         :type event: BaseEvent

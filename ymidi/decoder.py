@@ -16,7 +16,8 @@ import struct
 
 from typing import Any, List, Union, Dict, Tuple
 
-from ymidi.events.base import BaseEvent, BaseMetaMesage
+from ymidi.events.base import BaseEvent, BaseMetaMessage
+from ymidi.events.builtin import UnknownEvent, UnknownMetaEvent
 from ymidi.events.voice import VOICE_EVENTS
 from ymidi.events.system.realtime import REALTIME_EVENTS
 from ymidi.events.system.common import SYSTEM_COMMON_EVENTS
@@ -102,7 +103,7 @@ class BaseDecoder(object):
 
     def to_bytes(self, num: int) -> bytes:
         """
-        Converts the given intiger into valid bytes.
+        Converts the given integer into valid bytes.
 
         We expect only one int to be supplied at a time!
 
@@ -118,13 +119,13 @@ class BaseDecoder(object):
 
     def to_int(self, bts: bytes) -> int:
         """
-        Converts the given bytes into an intiger.
+        Converts the given bytes into an integer.
 
         We expect only one byte to be supplied at a time!
 
         :param num: Number to convert
         :type num: bytes
-        :return: Intoger representing the bytes
+        :return: Integer representing the bytes
         :rtype: int
         """
 
@@ -212,6 +213,7 @@ class ModularDecoder(BaseDecoder):
     The component using this decoder can decide which is the best!
     
     TODO: Implement checks to ensure interrupts are valid?
+    TODO: Re-write this docstring! Not accurate anymore!
     """
 
     def __init__(self) -> None:
@@ -256,7 +258,7 @@ class ModularDecoder(BaseDecoder):
         :type event: BaseEvent
         """
 
-        if not isinstance(event, BaseEvent):
+        if not issubclass(event, BaseEvent):
 
             # Not a valid event, raise an exception!
 
@@ -276,7 +278,7 @@ class ModularDecoder(BaseDecoder):
 
             self.collection[event.statusmsg] = event
 
-    def get_legnth(self, status: int) -> int:
+    def get_length(self, status: int) -> int:
         """
         Gets the length of the event using the given status message.
         
@@ -313,35 +315,49 @@ class ModularDecoder(BaseDecoder):
 
         # Determine if we are working with a new event:
 
-        if self.is_status(int.from_bytes(bts[0], 'big')):
+        if self.is_status(self.to_int(bts[0])):
 
             # Working with a new event! Set our current status:
 
-            self.decode_status[0] = bts[0]
+            self.decode_status[0] = self.to_int(bts[0])
 
         # Get the event we are working with:
 
         event = self.collection[self.decode_status[0]]
 
+        print(event)
+
         # Decode the values:
 
         val = []
 
-        for item in bts[0:]:
+        for item in bts[1:]:
 
-            val.append(int(item))
+            val.append(self.to_int(item))
+
+        # Determine if event is Unknown:
+
+        if event is UnknownEvent:
+            
+            # Add status message to the start of data:
+
+            print("Adding status message, UnknownEvent ...")
+            
+            val.insert(0, self.decode_status[0])
 
         # Are we a variable length event?
         
         if event.length == -1:
 
             # Ensure the last value is the end event:
-            
-            assert val[-1] == event.end.status
+
+            assert val[-1] == event.end.statusmsg
             
             # Remove the last data value:
             
             val.pop(-1)
+
+        print(val)
 
         # Create the event:
 
@@ -383,6 +399,9 @@ class ModularDecoder(BaseDecoder):
         num = int.from_bytes(bts, 'big')
         done = False
 
+        print(bts)
+        print(num)
+
         # Determine if we are working with a status byte:
 
         if self.is_status(num):
@@ -391,31 +410,25 @@ class ModularDecoder(BaseDecoder):
 
             event = self.collection[num]
 
-            # Check if the event is end of variable length sequence:
+            # Check if the event is end of variable length sequence, or coming after an unknown event:
 
-            if self.event and self.event[0].length == -1 and self.event[0].end.statusmsg == num:
+            if self.event and ((self.event[0].length == -1 and self.event[0].end.statusmsg == num) or self.event[0] is UnknownEvent):
 
                 # We came to the end of the sequence, exit time:
 
                 done = True
+                
+                # Add the end event to the data:
 
-            # Check if the event is ready to be returned now:
-
-            elif event.length == 0:
-
-                # Return the event, save us some time:
-
-                return event()
+                self.data[0].append(bts)
 
             else:
 
-                # Configure some data:
+                # Set some data:
 
                 self.decode_status.insert(0, num)
-                self.data.insert(0, [])
+                self.data.insert(0, [bts])
                 self.event.insert(0, event)
-
-                return None
 
         else:
 
@@ -425,23 +438,15 @@ class ModularDecoder(BaseDecoder):
 
         # Check if the data is ready to return:
 
-        if done or (len(self.data[0]) == self.event[0].length):
+        if done or (len(self.data[0]) - 1 == self.event[0].length):
 
-            # Create the event:
+            # Decode the event:
 
-            event = self.event[0](*self.data[0])
+            event = self.decode(self.data[0])
 
             # Clear the decoding state:
 
             self.data[0].clear()
-
-            # Check if we have to add a channel:
-
-            if event.has_channel:
-                
-                # Add the event:
-                
-                event.channel = self.decode_status[0] & 0x0F
 
             # Check if we are a nested event:
 
@@ -471,24 +476,12 @@ class ModularDecoder(BaseDecoder):
         :rtype: bytes
         """
 
-        # Get the status message of the event:
-        
-        status = event.statusmsg
-        
-        # Determine if we are working with channels:
-        
-        if event.has_channel:
-            
-            # Encode the channel number in the status message:
+        # Return the encoded data:
 
-             status = status & 0xF0 | event.channel
-        
-        # Return the final data:
-        
-        return bytes((status,) + event.data)
+        return bytes(event)
 
 
-class MetaDecoder(BaseDecoder):
+class MetaDecoder(ModularDecoder):
     """
     MetaDecoder - Decodes Meta Events present in MIDI files.
     
@@ -501,7 +494,7 @@ class MetaDecoder(BaseDecoder):
     and has a 'type', 'length', and 'bytes' fields.
     We use these fields to determine the type of event.
     
-    From here, it is quite simple as we are given the legnth of the event,
+    From here, it is quite simple as we are given the length of the event,
     so we just read a specific amount of bytes.
     
     This encoder is modular, similar to the ModularDecoder,
@@ -523,9 +516,11 @@ class MetaDecoder(BaseDecoder):
         self.var_index = 0  # Number of bytes we have read in varlen decoding
 
         self.meta_decode = False  # Value determining if we are in the process of decoding a meta event
-        self.meta_legnth = 0  # Length of the Meta event to decode
+        self.meta_length = 0  # Length of the Meta event to decode
         self.meta_byts = []  # Collection of all meta bytes we are working with
         self.meta_type = None  # Meta type we are working with
+
+        self.var_final = 0  # Temporary variable-length value to work with
 
     def reset(self):
         """
@@ -536,17 +531,18 @@ class MetaDecoder(BaseDecoder):
         This method is called automatically after each sequential
         decoding operation, but it can be called manually when necessary.
         """
-        
+
         # Reset the context variables:
-        
+
         self.var_value = None
         self.var_byt = None
         self.var_index = 0
-        
+        self.var_final = 0
+
         self.meta_decode = False
-        self.meta_legnth = False
-        self.meta_byts = False
-        self.meta_type = False
+        self.meta_length = 0
+        self.meta_byts = []
+        self.meta_type = None
 
     def load_default(self):
         """
@@ -561,9 +557,11 @@ class MetaDecoder(BaseDecoder):
             
             self.load_event(event)
 
-        # Also, load the default events in the ModularDecoder:
+        # Also, load the default voice events in the ModularDecoder:
 
-        super(ModularDecoder).load_default()
+        for event in VOICE_EVENTS:
+            
+            self.load_event(event)
 
     def load_event(self, event: BaseEvent):
         """
@@ -578,7 +576,7 @@ class MetaDecoder(BaseDecoder):
         :type event: BaseEvent
         """
 
-        if not isinstance(event, BaseEvent):
+        if not issubclass(event, BaseEvent):
 
             # Not a valid event, raise an exception!
 
@@ -604,13 +602,13 @@ class MetaDecoder(BaseDecoder):
         else:
             
             # Not a meta event, pass it along:
-            
-            super(BaseDecoder).load_event(event)
+                        
+            super().load_event(event)
 
-    def decode(self, bts: bytes) -> BaseMetaMesage:
+    def decode(self, bts: bytes) -> BaseMetaMessage:
         """
         Decodes the given bytes into a Meta Event.
-        
+
         We expect ALL meta event bytes to be present,
         including the status message, type, and length felids.
 
@@ -622,25 +620,27 @@ class MetaDecoder(BaseDecoder):
 
         # Check if the first byte is a valid status message
 
-        if bts[0] not in (META, SYSTEM_EXCLUSIVE, EOX):
-            
+        status = self.to_int(bts[0])
+
+        if status not in (META, SYSTEM_EXCLUSIVE, EOX):
+
             # Not a meta event, pass it along:
-            
-            return super(ModularDecoder).decode(bts)
-        
+
+            return super().decode(bts)
+
         # Get the event instance to work with:
         
-        if bts[0] == META:
+        if status == META:
 
-            event = self.meta_collection[bts[1]]
+            event = self.meta_collection[self.to_int(bts[1])]
 
         else:
 
             # System exclusive event:
 
-            event = self.meta_collection[bts[0]]
+            event = self.meta_collection[status]
 
-        # Check the legnth of the event:
+        # Check the length of the event:
 
         length, num_read = self.read_varlen(bts[2:])
 
@@ -650,7 +650,23 @@ class MetaDecoder(BaseDecoder):
 
         # Create and return the events:
 
-        return event(bts[num_read+1:])
+        final = []
+        
+        for item in bts[num_read+1:]:
+            
+            # Decode each byte:
+            
+            final.append(self.to_int(item))
+
+        # Check if we are working with unknown event:
+
+        if event is UnknownMetaEvent:
+
+            # Add status message to the front:
+
+            final.insert(0, status)
+
+        return event(*final)
 
     def seq_decode(self, byte: bytes) -> Union[None, BaseEvent]:
         """
@@ -671,7 +687,9 @@ class MetaDecoder(BaseDecoder):
 
         # Check if we are working with a valid status message:
 
-        if byte in (META, SYSTEM_EXCLUSIVE, EOX):
+        print(byte)
+
+        if self.to_int(byte) in (META, SYSTEM_EXCLUSIVE, EOX):
 
             # Configure ourselves to decode a Meta event
 
@@ -679,10 +697,9 @@ class MetaDecoder(BaseDecoder):
 
             if byte in (SYSTEM_EXCLUSIVE, EOX):
 
-                # Optimise for system exclusive events:
+                # Optimize for system exclusive events:
 
                 self.meta_type = byte
-
             return None
 
         if self.meta_decode:
@@ -692,46 +709,85 @@ class MetaDecoder(BaseDecoder):
             if not self.meta_type:
                 
                 # No event type specified, current byte should be it:
-                
+
                 self.meta_type = byte
+
+                event = self.meta_collection[self.to_int((self.meta_type))]
+                
+                print("Decoding event: {} ; Event length: {}".format(event, event.length))
                 
                 return None
 
-            if not self.meta_legnth:
+            elif not self.meta_length:
 
                 # No meta length specified, current byte should be it:
 
-                res = self.read_varlen_func([byte])
+                res, _ = self.read_varlen([byte])
                 
-                if res:
-                    
+                if res is not None:
+
                     # Got our value! Set it...
 
-                    self.meta_legnth = res
+                    self.meta_length = res
+
+                    print("Found meta length: {}".format(self.meta_length))
 
             else:
             
                 # Append the byte to the list:
 
-                self.meta_byts.append(byte)
+                print("Adding byte to list ...")
 
-            if len(self.meta_byts) == self.meta_legnth:
+                self.meta_byts.append(self.to_int(byte))
+                print("Current event list size: {}".format(len(self.meta_byts)))
+                print("Wanted length: {}".format(self.meta_length))
+
+            if len(self.meta_byts) == self.meta_length:
                 
                 # We are done! Create the object and reset:
                 
-                event = self.meta_collection[self.meta_type](*self.meta_byts)
+                event = self.meta_collection[self.to_int(self.meta_type)](*self.meta_byts)
 
                 self.reset()
                 
+                print("Final event: {}".format(event))
+                print("Final event type: {}".format(event.type))
+
                 return event
 
             # More data is needed, return None
             
+            print("More data needed ...")
+
             return None
 
         # Otherwise, pass this data along:
 
-        return super(ModularDecoder).seq_decode(byte)
+        print("Passing along normal event ...")
+
+        return super().seq_decode(byte)
+
+    def encode(self, event: BaseEvent) -> bytes:
+        """
+        Returns the bytes of the event.
+
+        We simply convert the object into bytes.
+
+        :param event: Event to convert
+        :type event: BaseEvent
+        :return: Bytes of the encoded events
+        :rtype: bytes
+        """
+
+        # Get the delta time:
+        
+        delta = self.write_varlen(event.delta)
+        
+        # Get event bytes:
+
+        data = bytes(event)
+
+        return delta + data
 
     def read_varlen(self, source: List) -> Tuple[int, int]:
         """
@@ -768,63 +824,31 @@ class MetaDecoder(BaseDecoder):
         :rtype: Tuple[int, int]
         """
 
-        # Iterate as far as we can:
+        for byte in source:
 
-        for byt in source:
+            byte = self.to_int(byte)
 
-            # Check if we are working with the first value:
-
-            if not self.var_byt:
-
-                # Check if we have more to read:
-
-                if byt & 0x80:
-
-                    # Setup our variables to read more data:
-                    
-                    self.var_value = byt
-                    self.var_byt = self.var_value
-
-                    # Initial value operation:
-
-                    self.var_value &= 0x7F
-
-                    self.var_index = 1
-                    
-                    continue
-                
-                # We are done, return the value:
-                
-                return byt, 1
-
-            # Increment our index:
+            self.var_final = (self.var_final << 7) | (byte & 0x7f)
 
             self.var_index += 1
 
-            # Do the byte operation:
+            if byte < 0x80:
 
-            self.var_byt = byt
-            self.var_value = (self.var_value << 7) + (self.var_byt & 0x7f)
+                temp = self.var_final
+                temp2 = self.var_index
 
-            if self.var_byt & 0x80:
+                self.var_final = 0
+                self.var_index = 0
 
-                # Not complete, keep going:
+                return temp, temp2
 
-                continue
-
-            # Operation is complete, return:
-
-            self.var_byt = None
-
-            return self.var_value, self.var_index
-
-        # More values needed, return None:
+        # Otherwise, return nothing:
 
         return None
- 
+
     def write_varlen(self, num: int) -> bytes:
         """
-        Converts an intiger into a collection of bytes.
+        Converts an integer into a collection of bytes.
 
         We return the converted bytes after the operation is complete.
 
@@ -833,15 +857,23 @@ class MetaDecoder(BaseDecoder):
         :return: Bytes of encoded data
         :rtype: bytes
         """
-        
-        buffer = num & 0x7F
-        
-        while True:
-            
-            if buffer & 0x80:
                 
-                buffer >>= 8
-            else:
-                break
+        bytes = []
+        
+        while num:
+                        
+            bytes.append(num & 0x7f)
             
-        return buffer
+            num >>= 7
+
+        if bytes:
+            
+            bytes.reverse()
+            
+            for i in range(len(bytes) - 1):
+                
+                bytes[i] |= 0x80
+                
+            return bytes
+        
+        return [0]

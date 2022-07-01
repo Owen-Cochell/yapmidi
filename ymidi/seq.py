@@ -52,7 +52,7 @@ class YMSequencer(HandlerCollection):
     As you can see,
     we retrieve an event from the input IO modules,
     and then concurrently send it through the relevant meta handlers for each path.
-    The meta handlers from the event handlers and the output IO modules are diffrent,
+    The meta handlers from the event handlers and the output IO modules are different,
     which allows events to be altered depending upon where it is going.
 
     We synchronize the asyncio event loop across all components.

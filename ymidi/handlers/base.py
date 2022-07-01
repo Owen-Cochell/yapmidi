@@ -7,7 +7,7 @@ A HandlerCollection is a class
 that organizes and works with handlers.
 
 This file ONLY contains the BaseHandler, MetaHandler, and HandlerCollection classes.
-Builtin handlers are kept elseware.
+Builtin handlers are kept elsewhere.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ class BaseHandler(BaseModule):
     This could be anything from printing them,
     altering the state of something, the possibilities are endless!
 
-    Event handlers are usually not used discreetely.
+    Event handlers are usually not used discreetly.
     Instead, they are loaded into the Sequencer,
     which calls them when relevant MIDI events are encountered.
 
@@ -77,7 +77,7 @@ class BaseHandler(BaseModule):
         Runs the external function attached to this handler.
 
         This method is usually used as the handle method for the handler.
-        The external function MUST be a coroutene!
+        The external function MUST be a coroutine!
 
         :param event: Event to handle
         :type event: BaseEvent
@@ -90,7 +90,7 @@ class BaseHandler(BaseModule):
 
 class MetaHandler(BaseHandler):
     """
-    Metahandler - Class all meta-handlers must inherit!
+    MetaHandler - Class all meta-handlers must inherit!
 
     Meta handlers are similar to event handlers,
     except that instead of reacting to a MIDI event,
@@ -138,7 +138,7 @@ class MetaHandler(BaseHandler):
 
         Here, the meta handler can change and alter the event in any way that is necessary.
         This can range from altering the packet,
-        chaning the state of the Sequencer,
+        changing the state of the Sequencer,
         or even dropping the event, and preventing it from being processed.
 
         This method should return the finalized event.
@@ -164,7 +164,7 @@ class HandlerCollection(ModuleCollection):
     HandlerCollection - Eases the process of working with handlers!
 
     We offer some easy entry points into handler management,
-    mainly indexing and organising handlers so they are tied
+    mainly indexing and organizing handlers so they are tied
     to certain events.
     We also offer the meta handler framework,
     which allows meta handlers to alter(or drop)
@@ -201,7 +201,7 @@ class HandlerCollection(ModuleCollection):
         Loads an event handler and registers it to the given event(s).
 
         The event can be a single status message,
-        or it can be an iterable contaning multiple status messages.
+        or it can be an iterable containing multiple status messages.
         This method will automatically determine the correct way to process the given events.
         If you wish to register the handler to ALL received events,
         then you can use the HandlerCollection.GLOBAL_EVENT parameter.
@@ -379,7 +379,7 @@ class HandlerCollection(ModuleCollection):
     def callback(self, func: Callable[[HandlerCollection, BaseEvent,], Awaitable], event: Union[bytes, Iterable], name:str='', args:list=None):
         """
         Adds the given function to the HandlerCollection as a callback.
-        The function provided MUST be an asyncio coroutene!
+        The function provided MUST be an asyncio coroutine!
 
         This method is intended to be used as a decorator:
 
@@ -454,7 +454,7 @@ class HandlerCollection(ModuleCollection):
 
     def sync_submit(self, event: BaseEvent):
         """
-        Synchronously sends the event thorugh the handlers.
+        Synchronously sends the event through the handlers.
 
         This code is intended to be ran by synchronous code
         that needs to handle a given event.
@@ -503,7 +503,7 @@ class HandlerCollection(ModuleCollection):
 
     async def meta_handle(self, event: BaseEvent) -> Union[BaseEvent, None]:
         """
-        Sends the given event thorugh this collection's meta handlers.
+        Sends the given event through this collection's meta handlers.
 
         This method will send in event through all meta handlers
         in order of priority and return the end result.
@@ -547,7 +547,7 @@ class HandlerCollection(ModuleCollection):
         so be sure to call the meta_handle() method to do so(good),
         or the submit() method which does this operation for you(best).
 
-        We run each event handler in an asyncio task for 'concurency'.
+        We run each event handler in an asyncio task for 'concurrency'.
         Event handlers should not alter the state of this collection,
         so it is safe to run them at the same time.
 
