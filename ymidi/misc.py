@@ -11,7 +11,29 @@ from ymidi.errors import ModuleLoadException, ModuleStartException, ModuleStopEx
 
 # Function that yapmidi uses to get time:
 
-ytime = perf_counter_ns
+
+def ytime():
+    """
+    Default time function used by yap-midi.
+
+    We use the 'perf_counter_ns' for this,
+    and convert the nanoseconds to microseconds.
+    """
+
+    return perf_counter_ns() / 1000
+
+
+def seconds_to_microseconds(sec: int) -> int:
+    """
+    Converts seconds into microseconds
+
+    :param sec: Seconds to convert
+    :type sec: int
+    :return: Time in microseconds
+    :rtype: int
+    """
+
+    return sec * 1000000
 
 
 def write_varlen(num: int) -> bytes:
@@ -47,7 +69,7 @@ def write_varlen(num: int) -> bytes:
     return [0]
 
 
-def de_to_ms(self, delta: int, division: int, mpb: int) -> int:
+def de_to_ms(delta: int, division: int, tempo: int) -> int:
     """
     Converts the given delta time into microseconds.
 
@@ -57,12 +79,12 @@ def de_to_ms(self, delta: int, division: int, mpb: int) -> int:
     :type delta: int
     :param division: Division of the delta time
     :type division: int
-    :param tempo : Temp in MPB
+    :param tempo : Tempo in MPB
     :return: Time in milliseconds
     :rtype: int
     """
-    
-    return delta * (mpb / division)
+
+    return delta * (tempo / division)
 
 
 def ms_to_de(milli: int, division: int, tempo: int) -> int:
@@ -75,7 +97,7 @@ def ms_to_de(milli: int, division: int, tempo: int) -> int:
     :type milli: int
     :param division: Division of delta time
     :type division: int
-    :param tempo: Temp in MPB
+    :param tempo: Tempo in MPB
     :type tempo: int
     :return: Time in delta time(or number of ticks)
     :rtype: int

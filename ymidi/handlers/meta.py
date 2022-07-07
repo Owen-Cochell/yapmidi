@@ -17,7 +17,6 @@ Arpegiator and other musical enhancements?
 import asyncio
 
 from typing import Any, Union
-from ymidi import events
 
 from ymidi.handlers.base import MetaHandler
 from ymidi.events.base import BaseEvent, ChannelMessage

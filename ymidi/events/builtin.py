@@ -112,3 +112,20 @@ class UnknownEvent(BaseEvent):
         super().__init__(*args)
 
         self.statusmsg = status  # Status message of the unknown event
+
+
+class NullEvent(BaseEvent):
+    """
+    NullEvent - An event that does nothing!
+
+    This event is here for debugging purposes,
+    specifically if you want to use an event that will NEVER
+    be handled in a normal MIDI sceneario.
+
+    This event will likely be ignored by most setups,
+    unless they explicitly want to handle this event.
+    You can pass any data you like to this event!
+    """
+
+    name: str = "NullEvent"
+    statusmsg: int = -6

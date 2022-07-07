@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import asyncio
 
-from typing import Any, Union, Callable, Awaitable
-from collections.abc import Iterable
+from typing import Any, Union, Callable, Awaitable, Iterable
 from collections import defaultdict
+from ymidi.handlers.maps import GLOBAL
 
 from ymidi.misc import ModuleCollection, BaseModule
 from ymidi.events.base import BaseEvent
@@ -184,7 +184,7 @@ class HandlerCollection(ModuleCollection):
     TODO: Fix this description and 
     """
 
-    GLOBAL_EVENT = 'global'  # Global event type
+    GLOBAL_EVENT = GLOBAL # Global event type
 
     def __init__(self, event_loop=None):
 

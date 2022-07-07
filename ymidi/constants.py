@@ -8,6 +8,15 @@ MAX_INT_VALUE = 128
 #  MIDI Event Constants:
 # -----------------------
 
+# --== Builtin Messages: ==--
+
+START_PATTERN = -1
+START_TRACK = -2
+STOP_PATTERN = -3
+UNKNOWN_META = -4
+UNKNOWN_EVENT = -5
+NULL_EVENT = -6
+
 # --== Channel Messages: ==--
 
 NOTE_ON = 0x90

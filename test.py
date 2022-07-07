@@ -6,12 +6,14 @@ import asyncio
 import struct
 
 from ymidi.decoder import ModularDecoder, MetaDecoder
-from ymidi.events.voice import NoteEvent
+from ymidi.events.voice import NoteEvent, NoteOff, NoteOn
 from ymidi.events.system.system_exc import SystemExclusive
 from ymidi.events.builtin import StopPattern, StartTrack
 from ymidi.events.meta import MetaText
-
+from ymidi.handlers.maps import GLOBAL
+from ymidi.handlers.track import time_profile
 from ymidi.io.file import MIDIFile
+from ymidi.containers import Track, Pattern
 
 
 def midi_stream():
@@ -108,15 +110,15 @@ def varlen_decoding():
 async def midi_file():
     """
     Tests the MIDI file functionality.
-    
+
     We load a MIDI file and inspect it's content.
-    
+
     Test MIDI File Size: 2079 Bytes
     """
 
     # Create a MIDI File:
 
-    file = MIDIFile('church.mid')
+    file = MIDIFile('purcell_queen.mid')
 
     # Start the MIDI File:
 
@@ -161,5 +163,84 @@ async def midi_file():
 
     print("No more events!")
 
+
+async def single_track():
+    """
+    Tests the single track functionality of yap-midi Track objects.
+    """
+
+    track = Track()
+
+    # Add time_profile for preformance testing:
+
+    track.out_hands[GLOBAL].append(time_profile)
+
+    on = NoteOn(1, 1)
+
+    track.append(on)
+
+    off = NoteOff(1,1)
+    off.delta = 100
+
+    track.append(off)
+
+    on = NoteOn(2,2)
+    on.delta = 200
+
+    track.append(on)
+
+    text = MetaText.fromstring("This is a test!")
+    text.delta = 400
+
+    track.append(text)
+
+    off = NoteOff(4,4)
+    off.delta = 300
+
+    # This time, insert the object in between the on and text events:
+
+    track.insert(3, off)
+
+    # Print for fun:
+
+    print(track)
+
+    # Iterate and get some info:
+
+    for event in track:
+
+        print("Event: {}".format(event))
+        print("Delta: {}".format(event.delta))
+        print("Delta time: {}".format(event.delta_time))
+        print("Tick number: {}".format(event.tick))
+        print("Total time: {}".format(event.time))
+
+    # Play the events:
+
+    print("--------- Start Playback: ---------")
+
+    track.start_playback()
+
+    av = 0
+
+    while track.index < len(track):
+
+        res = await track.time_get()
+
+        print("Got event: {}".format(res))
+        print("Exit delta: {}".format(res.exit_delta))
+        print("Actual time: {}".format(res.time))
+        print("Time diff: {}".format(res.exit_delta - res.time))
+        print("Time diff(seconds): {}".format((res.exit_delta - res.time) / 1000000))
+
+        av += (res.exit_delta - res.time)
+
+    print("--------- Stop Playback: ---------")
+
+    av = av / len(track)
+
+    print("Average time diff: {}".format(av))
+    print("Average time diff (Seconds): {}".format(av / 1000000))
+
 #midi_stream()
-asyncio.run(midi_file())
+asyncio.run(single_track())

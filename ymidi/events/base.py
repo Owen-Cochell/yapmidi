@@ -43,13 +43,12 @@ class BaseEvent(object):
     def __init__(self, *args) -> None:
 
         self.tick = 0  # Tick this event occurs on
-        self.delta = 0  # The delta time of this event
+        self.delta = 0  # The delta time of this event in ticks
         self.data = args  # Data included in this event
         self.raw = b''  # RAW MIDI data associated with this event
-        self.time = 0  # Time since thew start of the track that this event occurs on in microseconds
-        self.total_ticks = 0  # Number of ticks since the start of the track
 
-        self.delta_micros = 0  # Delta time in microseconds
+        self.time = 0  # Time since the start of the track that this event occurs on in microseconds
+        self.delta_time = 0  # Delta time in microseconds
 
     def __len__(self):
         """
@@ -57,7 +56,7 @@ class BaseEvent(object):
         """
 
         return len(self.data)
-    
+
     def __bytes__(self) -> bytes:
         """
         Converts this event into bytes.

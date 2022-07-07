@@ -7,6 +7,9 @@ metadata such as temp, track name, copyright info, ect.
 TODO: Improve meta event descriptions!
 """
 
+from __future__ import annotations
+import string
+
 from ymidi.events.base import BaseMetaMessage
 from ymidi.constants import CHANNEL_PREFIX, COPYRIGHT, CUE_POINT, DEVICE_NAME, INSTRUMENT, KEY_SIGNATURE, LYRIC, MARKER, RESERVED, SEQUENCE_NUMBER, SMPTE_OFFSET, TEMPO_SET, TEXT, TIME_SIGNATURE, TRACK_END, TRACK_NAME
 
@@ -42,19 +45,37 @@ class MetaText(BaseMetaMessage):
     def __init__(self, *args) -> None:
         super().__init__(*args)
 
-        self.text = bytes(args).decode(encoding='utf-8')  # Decode the bytes into a string
+        self.text = bytes(args).decode()  # Decode the bytes into a string
+
+    @classmethod
+    def fromstring(cls, str: string) -> MetaText:
+        """
+        Creates a MetaText event from a given string.
+
+        We encode the string into bytes,
+        and then pass it along to the init method.
+
+        :param str: String to work with
+        :type str: String
+        """
+
+        # Enocde the string and pass it along:
+
+        cls(*str.encode())
+
+        return cls
 
 
 class CopyrightNotice(MetaText):
     """
     Contains a copyright notice as ASCII text.
-    
+
     This notice should ideally contain the character C,
     copyright year, and owner of the copyright.
     These events should be the first event in the first track chunk at time 0,
     to ensure that this event is recorded and processed.
     """
-    
+
     name = "CopyrightNotice"
     type = COPYRIGHT
 
@@ -116,6 +137,7 @@ class CuePoint(MetaText):
 class DeviceName(MetaText):
     """
     Represents the name of the device/software that created this file.
+    TODO: I don't think this is accurate...
     """
 
     name = "DeviceName"
@@ -159,7 +181,7 @@ class EndOfTrack(BaseMetaMessage):
 class SetTempo(BaseMetaMessage):
     """
     Changes the tempo to the provided value.
-    
+
     This sets the tempo in microseconds per quarter note,
     using the provided value.
     """
@@ -204,11 +226,11 @@ class SMPTEOffset(BaseMetaMessage):
 class TimeSignature(BaseMetaMessage):
     """
     Sets the time signature.
-    
+
     The first value represents the numerator,
     and the second represents the denominator,
     which should be a negative power of two.
-    
+
     The next value is the number of MIDI clocks per metronome click,
     and the final value expresses the number of notated 32nd notes
     in a quarter note(24 MIDI clocks).
@@ -220,7 +242,7 @@ class TimeSignature(BaseMetaMessage):
 
     def __init__(self, numerator, denominator, cpm, npq) -> None:
         super().__init__(numerator, denominator, cpm, npq)
-        
+
         self.numerator = numerator  # Numerator of the time signature
         self.denominator = denominator  # Denominator of time signature
         self.cpm = cpm  # MIDI clocks per metronome click
@@ -248,7 +270,7 @@ class KeySignature(BaseMetaMessage):
 
     def __init__(self, sf, mi) -> None:
         super().__init__(sf, mi)
-        
+
         self.sf = sf
         self.mi = mi
 

@@ -11,6 +11,8 @@ as well as some good debug classes.
 If you are a user you probably don't want to work with most of these!
 """
 
+from __future__ import annotations
+
 import asyncio
 from typing import Tuple
 
@@ -147,7 +149,7 @@ class NullIO(BaseIO):
 
 class EchoIO(BaseIO):
     """
-    NullIO - Adds inputted events to our output queue.
+    EchoIO - Adds inputted events to our output queue.
     
     As we receive inputs,
     we output them when requested.
@@ -364,3 +366,18 @@ class IOCollection(ModuleCollection):
             if module.running:
 
                 await self.stop_module(module)
+
+
+class ChainIO(IOCollection):
+    """
+    ChainIO - Allows for IO modules to utilize other IO modules.
+
+    This allows for IO modules to be recursively nested within each other.
+    For example, an IO module coudld take inputs from mutliple modules,
+    and do some operations on them.
+
+    :param IOCollection: _description_
+    :type IOCollection: _type_
+    """
+
+    pass

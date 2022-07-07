@@ -281,7 +281,7 @@ class ModularDecoder(BaseDecoder):
     def get_length(self, status: int) -> int:
         """
         Gets the length of the event using the given status message.
-        
+
         We use our collection of events to retrieve the legnth.
 
         :param status: Status message of the event
