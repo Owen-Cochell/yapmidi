@@ -11,9 +11,9 @@ and lack state chain methods such as start(), stop(), ect. ,
 they will still live under the 'handlers' directory.
 
 Track handlers expect the container that is being altered, the event that is being added,
-and the index where the event is being addded.
-This is useful if events are inserted or appedned into positions.
-If a track handler returns anything that does not evalutate to false,
+and the index where the event is being added.
+This is useful if events are inserted or appended into positions.
+If a track handler returns anything that does not evaluate to false,
 then the handle operation will be stopped, and no other handlers will be called.
 """
 
@@ -100,7 +100,7 @@ def global_tempo(track: Pattern, event: SetTempo, index: int):
 
     This should ONLY be bound to Patterns(something that holds tracks),
     and should only be used in type 1 files
-    where the tempo of all tracks should be syncronised.
+    where the tempo of all tracks should be synchronized.
 
     :param track: Pattern to alter
     :type track: Pattern
@@ -284,7 +284,7 @@ def determine_delta(container: Track, event: BaseEvent, index: int):
 
     if event.delta_time != 0:
 
-        # We definetly have a valid delta time!
+        # We definitely have a valid delta time!
 
         event.delta = ms_to_de(event.delta_time, container.division, container.tempo)
 
@@ -377,7 +377,7 @@ def rehandle(container: Track, event: BaseEvent, index: int):
     :type index: int
     """
 
-    # Determine if a rehande is necessary:
+    # Determine if a rehandle is necessary:
 
     if index < len(container) and event not in container:
 
@@ -388,7 +388,7 @@ def rehandle(container: Track, event: BaseEvent, index: int):
 
 def time_profile(container: Track, event: BaseEvent, index: int):
     """
-    Timedstamp events as they leave the container.
+    Timestamp events as they leave the container.
 
     This is useful for debugging purposes,
     specifically for determining the time delay of events.

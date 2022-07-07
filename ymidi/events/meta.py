@@ -59,7 +59,7 @@ class MetaText(BaseMetaMessage):
         :type str: String
         """
 
-        # Enocde the string and pass it along:
+        # Encode the string and pass it along:
 
         cls(*str.encode())
 

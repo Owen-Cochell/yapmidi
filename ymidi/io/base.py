@@ -373,7 +373,7 @@ class ChainIO(IOCollection):
     ChainIO - Allows for IO modules to utilize other IO modules.
 
     This allows for IO modules to be recursively nested within each other.
-    For example, an IO module coudld take inputs from mutliple modules,
+    For example, an IO module could take inputs from multiple modules,
     and do some operations on them.
 
     :param IOCollection: _description_
