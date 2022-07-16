@@ -2,6 +2,8 @@
 Miscellaneous components used by yap-midi.
 """
 
+from __future__ import annotations
+
 import asyncio
 
 from typing import Any
@@ -9,7 +11,7 @@ from time import perf_counter_ns
 
 from ymidi.errors import ModuleLoadException, ModuleStartException, ModuleStopException, ModuleUnloadException
 
-# Function that yapmidi uses to get time:
+# Function that yap-midi uses to get time:
 
 
 def ytime():
@@ -48,25 +50,25 @@ def write_varlen(num: int) -> bytes:
     :rtype: bytes
     """
                 
-    bytes = []
+    bts = []
         
     while num:
-                        
-        bytes.append(num & 0x7f)
-            
+             
+        bts.append(num & 0x7f)
+ 
         num >>= 7
 
-    if bytes:
-            
-        bytes.reverse()
-            
-        for i in range(len(bytes) - 1):
-                
-            bytes[i] |= 0x80
-                
-        return bytes
+    if bts:
 
-    return [0]
+        bts.reverse()
+
+        for i in range(len(bts) - 1):
+
+            bts[i] |= 0x80
+ 
+        return bytes(bts)
+
+    return bytes([0])
 
 
 def de_to_ms(delta: int, division: int, tempo: int) -> int:
@@ -80,21 +82,21 @@ def de_to_ms(delta: int, division: int, tempo: int) -> int:
     :param division: Division of the delta time
     :type division: int
     :param tempo : Tempo in MPB
-    :return: Time in milliseconds
+    :return: Time in microseconds
     :rtype: int
     """
 
-    return delta * (tempo / division)
+    return (delta) * (tempo / division)
 
 
-def ms_to_de(milli: int, division: int, tempo: int) -> int:
+def ms_to_de(micro: int, division: int, tempo: int) -> int:
     """
     Converts the given microseconds into delta time.
-    
-    We require the byte division and tempo in milliseconds per beat(MPB) for this operation.
 
-    :param milli: Millisecond time to convert
-    :type milli: int
+    We require the byte division and tempo in microseconds per beat(MPB) for this operation.
+
+    :param micro: Microsecond time to convert
+    :type micro: int
     :param division: Division of delta time
     :type division: int
     :param tempo: Tempo in MPB
@@ -103,7 +105,7 @@ def ms_to_de(milli: int, division: int, tempo: int) -> int:
     :rtype: int
     """
 
-    return (milli * division) / tempo
+    return (micro) / (tempo / division)
 
 
 def mpb_to_bpm(mpq: int, denom: int=4) -> int:
@@ -179,7 +181,7 @@ class BaseModule(object):
     these methods manually.
 
     Sub-classes can and should add functionality to this class.
-    
+
     TODO: Fix docstrings for this class!
     """
 
@@ -187,9 +189,14 @@ class BaseModule(object):
 
     def __init__(self, name=''):
 
+        super().__init__()
+
         self.name = name  # Friendly name of the module, changes per module, defined by the user
         self.running = False  # Value determining if we are running
+        self.run_event = asyncio.Event()  # Event determining if we are running
         self.collection: Any = None  # Instance of the ModuleCollection we are apart of
+
+        self.run_event.clear()
 
     async def start(self):
         """
@@ -219,10 +226,10 @@ class BaseModule(object):
         but it is recommended to stop all components in use by this module,
         as it will stop working with MIDI data soon.
 
-        Do not do anything too permanint!
+        Do not do anything too permanent!
         This module may be started again at a later date,
         in the case of a module restart operation.
-        Again, do do anything crazy permanint,
+        Again, do do anything crazy permanent,
         just stop all components, ideally in a way that can be started again.
         """
 
@@ -258,7 +265,7 @@ class BaseModule(object):
         it is reasonable to assume that this module is not going to be used again.
         IO modules can use this a a sign that their work is done.
 
-        It is recommended to make any final, permanint changes once this method is called.
+        It is recommended to make any final, permanent changes once this method is called.
 
         Do note, like load(), this method is NOT asynchronous!
         This is synchronous code designed to be ran in synchronous contexts.
@@ -266,6 +273,37 @@ class BaseModule(object):
         """
 
         pass
+
+    async def wait(self):
+        """
+        Waits until this module is complete.
+
+        We will block until this event has been stopped.
+        """
+
+        print("Waiting ...")
+
+        #await asyncio.sleep(0)
+
+        if not self.run_event.is_set():
+
+            await self.run_event.wait()
+
+    def _meta_start(self):
+        """
+        Sets the necessary values when this event is started.
+        """
+
+        self.running = True
+        self.run_event.clear()
+
+    def _meta_stop(self):
+        """
+        Sets the necessary values when this event is stopped.
+        """
+
+        self.running = False
+        self.run_event.set()
 
 
 class ModuleCollection(object):
@@ -276,7 +314,7 @@ class ModuleCollection(object):
     usually of a certain kind, for the user.
     This class does not offer entry points into said modules,
     that is the job of the child class to implement functionality.
-    
+
     Instead, we offer methods to alter these modules,
     and automatically handle them so the implementing classes don't have too.
     This includes managing the module state,
@@ -323,14 +361,14 @@ class ModuleCollection(object):
         self.modules = ()
         # Event loop in use. if not provided, then one will be created
         self.event_loop: asyncio.AbstractEventLoop = event_loop if event_loop is not None else asyncio.get_event_loop()
-        self.start_tasks = []  # Module start tasks
+        self.tasks = []  # Module running tasks
 
         self.module_type = object if module_type is None else module_type  # Module type to use, superclass if not specified
-        self.running = False  # Value determining if we are running
+        self.running = True  # Value determining if we are running
         self.num_loaded = 0  # Number of modules currently loaded
         self.max_loaded = 0  # Max number of modules loaded
 
-    def load_module(self, module: BaseModule) -> BaseModule:
+    def load_module(self, module: BaseModule, runner: bool = True, run_func: function = None) -> BaseModule:
         """
         Adds the given module to the collection.
 
@@ -344,6 +382,8 @@ class ModuleCollection(object):
         then all event handlers will have their start() methods called.
         This occurs even while the event loop is running,
         allowing handlers to be added during runtime.
+        If 'runner' is False, then we will not schedule any runners for the given module.
+        You can also pass a function to 'run_func' to be used instead of the default 'run_module()' method. 
 
         We also return the instance of the module we loaded.
 
@@ -383,7 +423,17 @@ class ModuleCollection(object):
 
         # Schedule the module's start() method:
 
-        self.start_tasks.append(self.event_loop.create_task(self.run_module(module)))
+        if runner:
+
+            if run_func is None:
+
+                run_func = self.run_module
+
+            print("Using run func: {}".format(run_func))
+
+            task = asyncio.create_task(run_func(module), name=module.name)
+
+            self.tasks.append(task)
 
         # Finally, return the module:
 
@@ -443,7 +493,7 @@ class ModuleCollection(object):
     async def stop_module(self, module: BaseModule) -> BaseModule:
         """
         Stops the given module.
-        
+
         This is done by calling the module's stop() method.
         We also return a copy of the module we worked with.
 
@@ -457,7 +507,7 @@ class ModuleCollection(object):
         # Call the stop method:
 
         try:
-
+        
             await module.stop()
 
         except Exception as e:
@@ -470,7 +520,7 @@ class ModuleCollection(object):
 
         # Alter the running status:
 
-        module.running = False
+        module._meta_stop()
 
         # Return the module:
 
@@ -494,9 +544,15 @@ class ModuleCollection(object):
 
         # Call the start method:
 
+        print("Now starting: {}".format(module))
+
         try:
 
+            print("Calling start method...")
+
             await module.start()
+
+            print("Start method called!")
 
         except Exception as e:
 
@@ -510,11 +566,20 @@ class ModuleCollection(object):
 
         # Alter the running status:
 
-        module.running = True
+        print("Altering running status...")
+
+        module._meta_start()
+
+        print("Running status altered!")
 
         # Return the module:
 
-        return module
+        print("Done starting module: {}".format(module))
+
+        print(asyncio.current_task())
+        print(asyncio.all_tasks())
+
+        return
 
     async def restart_module(self, module: BaseModule) -> BaseModule:
         """
@@ -561,7 +626,7 @@ class ModuleCollection(object):
         This usually involves starting all loaded modules.
         """
 
-        # Set our runing status:
+        # Set our running status:
 
         self.running = True
 
@@ -570,7 +635,7 @@ class ModuleCollection(object):
         Method used to stop this ModuleCollection.
 
         We set our running status,
-        as well as cancel the run() coroutene.
+        as well as cancel the run() coroutine.
 
         Again, this method is designed to be ran from asynchronous code,
         usually the TODO: Put masterclass name here
@@ -600,7 +665,19 @@ class ModuleCollection(object):
 
         # Just start the module:
 
+        print("Just starting module...")
+
+        print("Starting module: {}".format(module))
+        print("IN JUST START!")
+
         await self.start_module(module)
+
+        print("Started module: {}".format(module))
+
+        print(asyncio.current_task().done())
+        asyncio.current_task().print_stack()
+
+        return
 
     def _load_module(self, mod: BaseModule):
         """

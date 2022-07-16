@@ -73,7 +73,7 @@ class AdvancedEventFilter(MetaHandler):
     Any extra arguments will be passed along to the checker function.
     Your checker function should take at least one argument,
     which will be the event to check.
-    THIS CHECKER FUNCTION MUST BE AN ASYNCIO COROUTENE!
+    THIS CHECKER FUNCTION MUST BE AN ASYNCIO COROUTINE!
 
     Because function calls can be somewhat expensive performance wise,
     we are separate from EventFilter,
@@ -144,7 +144,7 @@ class OnToOff(MetaHandler):
     will change the running status, thus causing 
     the MIDI connection to loose some optimizations.
     Because of this, it is recommended for outgoing events
-    to not get converted, as it will save some bandwith.
+    to not get converted, as it will save some bandwidth.
     TODO: Explain this concept better
     """
 
@@ -189,7 +189,7 @@ class ChannelMap(MetaHandler):
     For example,
     the status message for NoteOn events changes based upon it's channel.
     The NoteOn status message for channel five(0x85)
-    is diffrent then the note on message for channel 15(0x8f).
+    is different then the note on message for channel 15(0x8f).
     Because the yap-midi events have unchanging status messages,
     every NoteOn message will get sent to the same handler(0x80).
     The handler at that key may have to determine the channel
@@ -232,7 +232,7 @@ class ChannelMap(MetaHandler):
         """
         Does the dirty work of event handling.
 
-        As stated in this classe's docstring,
+        As stated in this class's docstring,
         we combine the channel and status message of the event.
 
         :param event: Event to work with
@@ -242,7 +242,7 @@ class ChannelMap(MetaHandler):
         """
 
         # Get the true key:
-        
+
         key = event.statusmsg & 0xF0 | event.channel
 
         # Setup a temporary mapping:

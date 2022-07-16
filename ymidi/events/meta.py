@@ -172,7 +172,7 @@ class EndOfTrack(BaseMetaMessage):
     This message is NOT optional,
     and must be present at the end of each track!
     """
-    
+
     name = "EndOfTrack"
     type = TRACK_END
     length = 0

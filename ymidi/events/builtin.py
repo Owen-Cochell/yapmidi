@@ -7,6 +7,7 @@ such as start of files and tracks, and end of MIDI files.
 ALL builtin events have negative status messages.
 """
 
+from ymidi.constants import META
 from ymidi.events.base import BaseEvent
 
 
@@ -67,11 +68,11 @@ class StopPattern(BaseEvent):
 class UnknownMetaEvent(BaseEvent):
     """
     UnknownMetaEvent - A meta event that we do not know about.
-    
+
     We keep the event data and type for inspection.
     We keep track of these events for debugging purposes,
     instead of silently trashing them.
-    
+
     You probably should not attempt to work with these events
     unless you know what you are looking for!
     """
@@ -79,10 +80,11 @@ class UnknownMetaEvent(BaseEvent):
     name: str = "UnknownMetaEvent"
     statusmsg: int = -4
 
-    def __init__(self, status, *args) -> None:
+    def __init__(self, status, meta_type, *args) -> None:
         super().__init__(*args)
-        
-        self.statusmsg = status  # Status message of the unknown event
+
+        self.event_status = status  # Status message of the unknown event
+        self.event_type = meta_type  # Event type
 
 
 class UnknownEvent(BaseEvent):
@@ -120,7 +122,7 @@ class NullEvent(BaseEvent):
 
     This event is here for debugging purposes,
     specifically if you want to use an event that will NEVER
-    be handled in a normal MIDI sceneario.
+    be handled in a normal MIDI scenario.
 
     This event will likely be ignored by most setups,
     unless they explicitly want to handle this event.

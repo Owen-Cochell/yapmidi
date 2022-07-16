@@ -20,16 +20,32 @@ then the handle operation will be stopped, and no other handlers will be called.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from ymidi.constants import TEMPO_SET
 
 from ymidi.events.base import BaseEvent
-from ymidi.events.builtin import StartPattern
+from ymidi.events.builtin import StartPattern, StopPattern
 from ymidi.events.meta import EndOfTrack, InstrumentName, SetTempo, TimeSignature, TrackName
 from ymidi.misc import de_to_ms, ms_to_de, ytime
 
 if TYPE_CHECKING:
     from ymidi.containers import Track, Pattern
 
- 
+
+def append_event(track: Track, event: BaseEvent, index: int):
+    """
+    Simply appends the event to the end of the given track.
+
+    :param track: Track to work with
+    :type track: Track
+    :param event: Event to append
+    :type event: BaseEvent
+    :param index: Current index
+    :type index: int
+    """
+
+    track.append(event)
+
+
 def track_name(track: Track, event: TrackName, index: int):
     """
     Changes the 'name' attribute of the track to the value in the TrackName.
@@ -110,28 +126,13 @@ def global_tempo(track: Pattern, event: SetTempo, index: int):
     :type index: int
     """
 
-    for track in Pattern:
+    print("Applying global tempo...")
+
+    for track in track:
 
         # Set the tempo on this track:
 
         track.mpb = event.tempo
-
-
-def start_pattern(pattern: Pattern, event: StartPattern, index: int):
-    """
-    Extracts info from the StartPattern event and applies it to the Pattern.
-
-    We expect to be bound to a StartPattern event.
-
-    :param pattern: Pattern to alter
-    :type pattern: Pattern
-    :param event: StartPattern event
-    :type event: StartPattern
-    :param index: Index of the event
-    :type index: int
-    """
-    
-    pattern.divisions = event.divisions
 
 
 def create_tracks(pattern: Pattern, event: StartPattern, index: int):
@@ -150,17 +151,86 @@ def create_tracks(pattern: Pattern, event: StartPattern, index: int):
 
     # Create each track and add it:
 
+    print("Creating tracks...")
+
     for _ in range(event.num_tracks):
 
-        pattern.append(Track())
+        pattern.add_track()
+
+
+def attach_global_tempo(pattern: Pattern, event: StartPattern, index: int):
+    """
+    Determines if it is necessary to attach the 'global_tempo()' track handler.
+
+    As of now, we only do this if the format is 1.
+
+    :param pattern: Pattern to work with
+    :type pattern: Pattern
+    :param event: StartPattern event
+    :type event: StartPattern
+    :param index: Event index we are on
+    :type index: int
+    """
+
+    # Attach the global tempo object:
+
+    print("Attaching global_tempo...")
+
+    input()
+
+    if event.format == 1:
+
+        pattern.out_hands[TEMPO_SET].append(global_tempo)
+
+
+def start_pattern(pattern: Pattern, event: StartPattern, index: int):
+    """
+    Extracts info from the StartPattern event and applies it to the Pattern.
+
+    We expect to be bound to a StartPattern event.
+
+    :param pattern: Pattern to alter
+    :type pattern: Pattern
+    :param event: StartPattern event
+    :type event: StartPattern
+    :param index: Index of the event
+    :type index: int
+    """
+
+    pattern.divisions = event.divisions
+    pattern.format = event.format
+
+    print("Format: {}".format(pattern.format))
+    print("Divisions: {}".format(event.divisions))
+
+    input()
+
+    return True
+
+
+def stop_pattern(pattern: Pattern, event: StopPattern, index: int):
+    """
+    We do nothing but return True,
+    so the StopPattern() is not stored in any tracks.
+
+    :param pattern: Pattern to work with
+    :type pattern: Pattern
+    :param event: StopPattern event
+    :type event: StopPattern
+    :param index: Index of the event
+    :type index: int
+    """
+
+    return True
 
 
 def sort_events(pattern: Pattern, event: BaseEvent, index: int):
     """
     Sorts the given events into tracks.
 
-    We use the track_index value in the Pattern
-    to determine which track to add events to.
+    We check if the event has a valid track that is apart of.
+    Otherwise, we make an educated guess by using track_index,
+    which will add it to the current track we are working with.
 
     :param pattern: Pattern of tracks
     :type pattern: Pattern
@@ -170,9 +240,19 @@ def sort_events(pattern: Pattern, event: BaseEvent, index: int):
     :type index: int
     """
 
-    # Add the event to the given track:
+    print("Sorting event: {}".format(event))
 
-    pattern[pattern.track_index].append(event)
+    if event.track > -1:
+
+        # Add the event to the given track:
+
+        pattern[event.track].submit_event(event)
+
+    else:
+
+        # Guess, add the event to the track we are working with
+
+        pattern[pattern.track_index].submit_event(event)
 
 
 def stop_track(pattern: Pattern, event: EndOfTrack, index: int):
@@ -182,6 +262,9 @@ def stop_track(pattern: Pattern, event: EndOfTrack, index: int):
     We should ONLY do this once the track is complete,
     i.e we get a EndOfTrack event.
 
+    We only increment the index if there are other 
+    objects in our collection!
+
     :param pattern: Pattern to alter
     :type pattern: Pattern
     :param event: EndOfTrack event
@@ -190,7 +273,18 @@ def stop_track(pattern: Pattern, event: EndOfTrack, index: int):
     :type index: int
     """
 
-    pattern.track_index += 1
+    print("Stopping track!")
+
+    print(pattern.track_index)
+    print(len(pattern))
+
+    input()
+
+    if pattern.track_index + 1 < len(pattern):
+
+        # Increment the index:
+
+        pattern.track_index += 1
 
 
 def event_tick(container: Track, event: BaseEvent, index: int):
@@ -237,7 +331,7 @@ def event_time(container: Track, event: BaseEvent, index: int):
 
         offset = container[index - 1].time
 
-    event.time = offset + de_to_ms(event.delta, container.division, container._mpb)
+    event.time = offset + de_to_ms(event.delta, container.divisions, container._mpb)
 
 
 def event_delta_time(container: Track, event: BaseEvent, index: int):
@@ -252,7 +346,7 @@ def event_delta_time(container: Track, event: BaseEvent, index: int):
     :type index: int
     """
 
-    event.delta_time = de_to_ms(event.delta, container.division, container._mpb)
+    event.delta_time = de_to_ms(event.delta, container.divisions, container._mpb)
 
 
 def determine_delta(container: Track, event: BaseEvent, index: int):
@@ -286,7 +380,7 @@ def determine_delta(container: Track, event: BaseEvent, index: int):
 
         # We definitely have a valid delta time!
 
-        event.delta = ms_to_de(event.delta_time, container.division, container.tempo)
+        event.delta = ms_to_de(event.delta_time, container.divisions, container.tempo)
 
         return
 
@@ -336,11 +430,9 @@ def determine_delta(container: Track, event: BaseEvent, index: int):
 
 def set_division(container: Pattern, event: Track, index: int):
     """
-    Sets the division on the given track.
+    Sets the divisions on the given track.
 
-    This handler is used to sync the division with all
-    added tracks.
-    Because this is attached to a track, we return True to stop further handling.
+    This handler is used to sync the divisions with all added tracks.
 
     :param container: Pattern wo work with
     :type container: Pattern
@@ -350,9 +442,7 @@ def set_division(container: Pattern, event: Track, index: int):
     :type index: int
     """
 
-    event.division = container._division
-
-    return True
+    event.divisions = container._divisions
 
 
 def rehandle(container: Track, event: BaseEvent, index: int):

@@ -14,6 +14,15 @@ class YMidiBaseException(BaseException):
     pass
 
 
+class StopPlayback(YMidiBaseException):
+    """
+    Exception raised when playback is over,
+    but more events are requested.
+    """
+
+    pass
+
+
 class ModuleCollectionException(YMidiBaseException):
     """
     Parent class for ModuleCollection errors.

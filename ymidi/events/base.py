@@ -46,6 +46,7 @@ class BaseEvent(object):
         self.delta = 0  # The delta time of this event in ticks
         self.data = args  # Data included in this event
         self.raw = b''  # RAW MIDI data associated with this event
+        self.track = -1  # Track we are apart of, -1 by default(No track)
 
         self.time = 0  # Time since the start of the track that this event occurs on in microseconds
         self.delta_time = 0  # Delta time in microseconds
@@ -166,11 +167,6 @@ class BaseMetaMessage(BaseEvent):
     name: str = "BaseMeta"
     statusmsg = META
     type: int = 0x00  # Meta event type
-
-    def __init__(self, *args) -> None:
-        super().__init__(*args)
-
-        self.track = 0  # Track number this event occurred on
 
     def __bytes__(self) -> bytes:
         """

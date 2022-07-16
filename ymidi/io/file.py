@@ -13,7 +13,7 @@ from ymidi.decoder import MetaDecoder
 from ymidi.events.base import BaseEvent
 from ymidi.events.meta import EndOfTrack
 from ymidi.events.builtin import StartPattern, StartTrack, StopPattern
-from ymidi.constants import META, TRACK_END
+from ymidi.constants import META, SYSTEM_EXCLUSIVE, TRACK_END, EOX
 from ymidi.misc import write_varlen
 
 
@@ -68,7 +68,7 @@ class MIDIFile(BaseIO):
         super().__init__(proto, MetaDecoder(), name=name)
 
         self.buffer = buffer  # Number of events to have loaded at one time
-        self.collection = asyncio.Queue()  # Queue of events
+        self.queue = asyncio.Queue()  # Queue of events
 
         self.num_tracks = 0  # Number of tracks present
         self.num_processed = 0  # Number of tracks processed
@@ -101,9 +101,18 @@ class MIDIFile(BaseIO):
 
         # Read the file header:
 
-        await self.collection.put(await self.read_file_header())
+        await self.queue.put(await self.read_file_header())
 
         return await super().start()
+
+    async def stop(self):
+        """
+        Stops this module.
+
+        We simply set the 'finished_processing' value.
+        """
+
+        self.finished_processing = True
 
     async def get(self) -> BaseEvent:
         """
@@ -116,13 +125,13 @@ class MIDIFile(BaseIO):
         :rtype: BaseEvent
         """
 
-        # Fill our collection if necessary:
+        # Fill our queue if necessary:
 
         await self.fill_buffer()
 
         # Return the event at the start:
 
-        return await self.collection.get()
+        return await self.queue.get()
 
     async def put(self, event: BaseEvent):
         """
@@ -185,14 +194,14 @@ class MIDIFile(BaseIO):
         # Check if we have more to process:
         
         if self.finished_processing:
-            
-           # Check if there are events in the queue:
-           
-           if self.collection.empty():
+
+            # Check if there are events in the queue:
+
+            if self.queue.empty():
+
+                # No more events, return False:
                
-               # No more events, return False:
-               
-               return False
+                return False
 
         # Return True:
 
@@ -206,7 +215,7 @@ class MIDIFile(BaseIO):
         Otherwise, we ensure that the buffer is filled up to the given number.
         """
 
-        while (not self.buffer or self.buffer > self.collection.qsize()) and not self.finished_processing:
+        while (not self.buffer or self.buffer > self.queue.qsize()) and not self.finished_processing:
 
             # Determine if we should read the track header:
 
@@ -214,7 +223,7 @@ class MIDIFile(BaseIO):
 
                 # Read the track header
 
-                await self.collection.put(await self.read_track_header())
+                await self.queue.put(await self.read_track_header())
                 self.next_event_track = False
 
                 continue
@@ -223,23 +232,16 @@ class MIDIFile(BaseIO):
 
             event = await self.read_event()
 
-            await self.collection.put(event)
+            await self.queue.put(event)
 
             # Check if this track is over:
-
-            #print(self.collection[-1])
 
             if event.statusmsg == META and event.type == TRACK_END:
 
                 # This track is over, make this known:
 
-                print("Track complete!")
-
                 self.next_event_track = True
                 self.num_processed += 1
-
-                print("Number of tracks processed: {}".format(self.num_processed))
-                print("Number of tracks present: {}".format(self.num_tracks))
 
                 # Determine if we are done processing the file:
 
@@ -247,7 +249,7 @@ class MIDIFile(BaseIO):
 
                     # We are done processing, stop and return:
 
-                    await self.collection.put(StopPattern())
+                    await self.queue.put(StopPattern())
                     self.finished_processing = True
 
     async def read_track_header(self) -> StartTrack:
@@ -335,13 +337,17 @@ class MIDIFile(BaseIO):
         print("Delta time: {} ; Items read: {}".format(delta, read))
 
         res = None
+        blah = []
         
         while res is None:
             
             # Get the result from the decoder:
 
-            res = self.decoder.seq_decode(await self.proto.read(1))
-        
+            thing = await self.proto.read(1)
+            blah.append(thing)
+
+            res = self.decoder.seq_decode(thing[0])
+
         # We have our object! Attach the delta time:
 
         res.delta = delta
@@ -353,6 +359,124 @@ class MIDIFile(BaseIO):
         # Finally, return the MIDI event:
 
         print("Processed event: {}".format(res))
+
+        dumm = []
+
+        for val in blah:
+
+            dumm.append(val[0])
+
+        print("All processed data: {}".format(dumm))
+
+        input()
+
+        return res
+
+    async def read_event_new(self) -> BaseEvent:
+        """
+        Reads the next event in the file.
+
+        This method is usually called automatically where necessary,
+        but the user can run this manually to get events.
+        TODO: Attach raw data to outgoing events!
+
+        :return: MIDIEvent from the file
+        :rtype: BaseEvent
+        """
+
+        # Read the delta time:
+
+        print("Getting delta:")
+
+        delta, read = self.decoder.read_varlen(self.proto)
+
+        print("Delta time: {}".format(delta))
+
+        res = None
+        data = None
+
+        # [NEW] Get the statusmsg:
+
+        status = await self.proto.read(1)
+
+        # Determine if we are a meta event:
+
+        if status[0] in (META, SYSTEM_EXCLUSIVE, EOX):
+
+            # Get the type:
+
+            meta_type = await self.proto.read(1)
+
+            # Get the length:
+
+            length, _ = self.decoder.read_varlen(self.proto)
+
+            # Read all bytes:
+
+            print("In meta read")
+
+            print(status)
+            print(type(status))
+            print(meta_type)
+            print(type(meta_type))
+            print(write_varlen(length))
+            print(type(write_varlen(length)))
+
+            data = status + meta_type + write_varlen(length) + await self.proto.read(length)
+
+        else:
+
+            print("Not a meta event ...")
+
+            # Determine if this is a status message:
+
+            temp = b''
+            offset = 0
+
+            if self.decoder.is_data(status[0]):
+
+                # Use running status ...
+
+                print("Using running status")
+                print("Got data: {}".format(status))
+ 
+                temp = status
+
+                status = bytes([self.decoder.get_running()])
+
+            print(status)
+
+            # Get the length of the event:
+
+            length = self.decoder.get_length(status[0])
+
+            # Read the specified amount:
+
+            data = status + temp + await self.proto.read(length - offset)
+
+        print(data)
+        print(type(data))
+
+        blah = bytes(data)
+
+        print(blah)
+        print(type(blah))
+
+        print(list(blah))
+
+        input()
+
+        res = self.decoder.decode(data)
+
+        # We have our object! Attach the delta time:
+
+        res.delta = delta
+
+        # Attach the track number:
+
+        res.track = self.num_processed
+
+        # Finally, return the MIDI event:
 
         return res
 

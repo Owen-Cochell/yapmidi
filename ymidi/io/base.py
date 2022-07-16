@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Tuple
+from ymidi.constants import START_PATTERN
 
 from ymidi.protocol import BaseProtocol
 from ymidi.decoder import BaseDecoder
@@ -38,7 +39,7 @@ class BaseIO(BaseModule):
 
     NAME = "BaseIO"
 
-    def __init__(self, proto: BaseProtocol, decoder: BaseDecoder, name: str="") -> None:
+    def __init__(self, proto: BaseProtocol, decoder: BaseDecoder, name: str = "") -> None:
 
         super().__init__(name=name)
 
@@ -70,7 +71,7 @@ class BaseIO(BaseModule):
     async def start(self):
         """
         Starts this IO module.
-        
+
         All child IO modules should call this function!
         We make sure the protocol object is properly started.
         """
@@ -80,27 +81,27 @@ class BaseIO(BaseModule):
     async def stop(self):
         """
         Stops this IO module.
-        
+
         All child IO modules should call this function!
         We make sure the protocol object is stopped correctly.
         """
-        
+
         self.proto.stop()
 
     def has_events() -> bool:
         """
         Determines if there are any more events to return.
-        
+
         This operation can greatly differ depending on the Io module,
         so the dirty details are left up to the child class.
-        
+
         This should return True if there are more events to return,
         and False if there are no more events to return.
 
         :return: Boolean determining if there are events to return
         :rtype: bool
         """
-        
+
         raise NotImplementedError("Must be overridden in child class!")
 
 
@@ -114,6 +115,9 @@ class NullIO(BaseIO):
     """
 
     NAME = "NullIO"
+
+    def __init__(self) -> None:
+        super().__init__(BaseProtocol, None, name="NullIO")
 
     async def get(self) -> None:
         """
@@ -150,14 +154,14 @@ class NullIO(BaseIO):
 class EchoIO(BaseIO):
     """
     EchoIO - Adds inputted events to our output queue.
-    
+
     As we receive inputs,
     we output them when requested.
     """
-    
+
     def __init__(self) -> None:
 
-        super().__init__(None, None, name="EchoIO")
+        super().__init__(BaseProtocol, None, name="EchoIO")
 
         self.queue = asyncio.queues.Queue()
 
@@ -205,12 +209,20 @@ class IOCollection(ModuleCollection):
     allowing all modules to output events using just one call.
 
     We operate off a queue based model,
-    meaning that events are added to a queue as the modules 
+    meaning that events are added to a queue as the modules
     encounter events.
     This allows for events to accumulate until they are needed,
     and for code to block until an event is encountered.
     This queue can be manipulated with our methods.
     Advanced components will bypass these methods and access the queue directly.
+
+    This class supports auto removal!
+    For example, if an IO module has no more events,
+    then it can be automatically removed from the collection.
+    This is determined by calling the 'has_events()' method.
+    If an IO module is done, 
+    then it will be automatically stopped and unloaded.
+    This is great for getting rid of tasks that are doing nothing!
 
     TODO: Check out this list!
     - Implement better queue entry points
@@ -218,15 +230,16 @@ class IOCollection(ModuleCollection):
     - TESTING!
     """
 
-    def __init__(self, event_loop=None) -> None:
-        
+    def __init__(self, event_loop=None, auto_remove: bool = True) -> None:
+
         super().__init__(event_loop, BaseIO)
+
+        print("RUNNING: {}".format(self.running))
 
         self.queue = asyncio.queues.Queue()  # Output queue that holds events
 
-        self.tasks = ()  # Tuple mapping modules to tasks
-
-        self.modules: Tuple[BaseIO,...] = ()
+        self.modules: Tuple[BaseIO, ...] = ()
+        self.auto_remove = auto_remove  # Determines if we should auto-remove modules
 
     async def get(self) -> BaseEvent:
         """
@@ -261,7 +274,7 @@ class IOCollection(ModuleCollection):
         This allows for Non-asynchronous code
         to interact with the IO Queue.
 
-        We utilise the event loop to run the async code.
+        We utilize the event loop to run the async code.
 
         :return: BaseEvent object retrieved from the queue.
         :rtype: BaseEvent
@@ -287,40 +300,6 @@ class IOCollection(ModuleCollection):
 
         return self.event_loop.run_until_complete(self.put(event))
 
-    def load_module(self, module: BaseIO) -> BaseIO:
-        """
-        We do the same as ModuleCollection,
-        but we also schedule the modules to run in an asyncio Task.
-
-        This allows modules to start when the event loop starts,
-        and it also allows them to generate events when they encounter them.
-
-        :param module: Module to load
-        :type module: BaseModule
-        :return: Module loaded
-        :rtype: BaseModule
-        """
-
-        # Load the module:
-
-        super().load_module(module)
-
-        # Schedule the module to run as a Task:
-
-        task = self.event_loop.create_task(self.run_module(module))
-
-        # Add the task to the task list:
-
-        temp = list(self.tasks)
-
-        temp.append(task)
-
-        self.tasks = tuple(temp)
-
-        # Return the module:
-
-        return module
-
     async def run_module(self, module: BaseIO):
         """
         Runs the given module.
@@ -328,6 +307,183 @@ class IOCollection(ModuleCollection):
         We only care about capturing read events from the modules.
         We await until we get a return value,
         and then we add it to our queue.
+
+        :param module: Module to work with
+        :type module: BaseIO
+        """
+
+        print("BAD run function")
+
+        # Start up the module:
+
+        await self.start_module(module)
+
+        # Run everything in try, so we can stop if canceled...
+
+        try:
+
+            # Sanity check passed! Loop until we stop...
+
+            while self.running and module.running and (not self.auto_remove or module.has_events()):
+
+                # Get event from module:
+
+                event = await module.get()
+
+                # Add the event to the queue:
+
+                await self.queue.put(event)
+
+        except asyncio.CancelledError:
+
+            # We have been cancelled!
+
+            pass
+
+        finally:
+
+            # Stop the module in question:
+
+            if module.running:
+
+                await self.stop_module(module)
+
+
+class ChainIO(BaseIO, IOCollection):
+    """
+    ChainIO - Allows for IO modules to utilize other IO modules.
+
+    This allows for IO modules to be recursively nested within each other.
+    For example, an IO module could take inputs from multiple modules,
+    and do some operations on them.
+
+    We inherit IOCollection, so we support all it's methods and features.
+    We change a few things, such as redefining get() to get get_chain()
+    which will get events from the chained modules.
+
+    This class is not intended to be used directly.
+    Instead, this class is here to be inherited by other IO modules.
+    You can use this class directly,
+    and it will work as advertised.
+    """
+
+    def __init__(self, proto: BaseProtocol, decoder: BaseDecoder, name: str = "", auto_remove: bool = True) -> None:
+
+        super().__init__(proto, decoder, name)
+
+        self.auto_remove = auto_remove
+
+    async def get_chain(self) -> BaseEvent:
+        """
+        Gets an event from the chained IO modules.
+
+        :return: Event
+        :rtype: BaseEvent
+        """
+
+        return await super().get()
+
+    async def put_chain(self, event: BaseEvent):
+        """
+        Puts an event into the chained IO modules.
+
+        :param event: Event to put into chained IO modules
+        :type event: BaseEvent
+        """
+
+        await super().put(event)
+
+
+class RouteIO(ChainIO):
+    """
+    RouteIO - Pulls events from one IO module and puts it in another,
+    essentially allowing you to connect IO modules together.
+
+    The purpose of this class is to pull IOModules from our inputs,
+    and send the event to our outputs.
+
+    IO modules can be registered as either inputs or outputs.
+    The inputs will have 'get()' continuously called.
+    The events will be retrieved and will be sent to the output IO modules via 'put()'.
+
+    Calling 'get()' will do this operation each time it is called.
+    This is to ensure that the routing will happen all the time
+    if this module is attached to an IOCollection.
+    'put()' will send the given event to all output IO modules.
+    """
+
+    def __init__(self, auto_remove: bool = True) -> None:
+
+        super().__init__(BaseProtocol, None, name="RouteIO", auto_remove=auto_remove)
+
+        self.running = True
+
+        print("Running: {}".format(self.running))
+
+        self.input = []  # List of input modules
+        self.output = []  # List of output modules
+
+    def has_events(self) -> bool:
+        """
+        Determines if we have more events to return.
+
+        We just see if there are any events 
+        in our input modules.
+
+        :return: Boolean determining if there are any more events
+        :rtype: bool
+        """
+
+        for mod in self.input:
+
+            if mod.has_events():
+
+                return True
+
+        return False
+
+    def load_input(self, module: BaseIO):
+        """
+        Loads an IO module as an input.
+
+        Input modules will have events extracted from them.
+        These input modules will also be ran as a task
+        under the 'run_module()' method.
+
+        :param module: Module to load
+        :type module: BaseIO
+        """
+
+        # Run the super load method:
+
+        self.load_module(module)
+
+        self.input.append(module)
+
+    def load_output(self, module: BaseIO):
+        """
+        Loads an IO module as output.
+
+        Output modules will have events put into them.
+        These output modules will NOT be ran as a task,
+        and will have events put into them once output modules have events to return.
+
+        :param module: Module to load
+        :type module: BaseIO
+        """
+
+        # Load the module, but only call the start method!
+
+        self.load_module(module, run_func=self.start_module)
+
+        self.output.append(module)
+
+    async def run_module(self, module: BaseIO):
+        """
+        Runs the given module.
+
+        We are identical to the 'run_module()' method in the IOCollection,
+        except that we pass the event to all output modules.
 
         :param module: Module to work with
         :type module: BaseIO
@@ -343,41 +499,48 @@ class IOCollection(ModuleCollection):
 
             # Sanity check passed! Loop until we stop...
 
-            while self.running and module.running:
+            while self.running and module.running and (not self.auto_remove or module.has_events()):
 
                 # Get event from module:
 
                 event = await module.get()
 
+                print("Got event: {}".format(event))
+
                 # Add the event to the queue:
 
-                await self.queue.put(event)
+                for mod in self.output:
+
+                    print("Handling event: {}".format(event))
+
+                    await mod.put(event)
+
+            print("No longer running!")
+
+            print(self.running)
+            print(module.running)
+            print(not self.auto_remove or module.has_events())
 
         except asyncio.CancelledError:
 
             # We have been cancelled!
 
-            raise
+            print("We have been canceled!")
+
+            pass
+
+        except Exception as e:
+
+            print("Exception: {}".format(e))
+
+            raise e
 
         finally:
 
             # Stop the module in question:
 
+            print("Stopping module...")
+
             if module.running:
 
                 await self.stop_module(module)
-
-
-class ChainIO(IOCollection):
-    """
-    ChainIO - Allows for IO modules to utilize other IO modules.
-
-    This allows for IO modules to be recursively nested within each other.
-    For example, an IO module could take inputs from multiple modules,
-    and do some operations on them.
-
-    :param IOCollection: _description_
-    :type IOCollection: _type_
-    """
-
-    pass

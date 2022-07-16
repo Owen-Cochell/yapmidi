@@ -12,8 +12,12 @@ from ymidi.events.builtin import StopPattern, StartTrack
 from ymidi.events.meta import MetaText
 from ymidi.handlers.maps import GLOBAL
 from ymidi.handlers.track import time_profile
+from ymidi.io import container
 from ymidi.io.file import MIDIFile
 from ymidi.containers import Track, Pattern
+from ymidi.io.base import RouteIO
+from ymidi.io.container import ContainerIO
+from ymidi.misc import ytime
 
 
 def midi_stream():
@@ -28,8 +32,8 @@ def midi_stream():
 
     stream = [0x90,60,0xF8,0xF0,1,2,0xF8,3,4,5,0xF7,64,60,0x80,30,0xF8,0x90,55,55,30,64,78,23,0xF8]
 
-    stream = bytes(stream)
-    
+    #stream = bytes(stream)
+
     print(stream)
     print(type(stream))
 
@@ -46,7 +50,7 @@ def midi_stream():
 
         print("Decoding value: {}".format(bts))
         print(type(bts))
-        value = decoder.seq_decode(decoder.to_bytes(bts))
+        value = decoder.seq_decode(bts)
         print("Response: {}".format(value))
 
         if value is not None:
@@ -171,7 +175,7 @@ async def single_track():
 
     track = Track()
 
-    # Add time_profile for preformance testing:
+    # Add time_profile for performance testing:
 
     track.out_hands[GLOBAL].append(time_profile)
 
@@ -242,5 +246,79 @@ async def single_track():
     print("Average time diff: {}".format(av))
     print("Average time diff (Seconds): {}".format(av / 1000000))
 
+
+async def test_route():
+    # Tests the IO routing capabilities of yap-midi
+
+    loop = asyncio.get_running_loop()
+
+    print(loop.is_running)
+
+    pattern = ContainerIO()
+    file = MIDIFile(path='majicalljarr.mid')
+    route = RouteIO()
+
+    # Connect the modules together:
+
+    print("loading file...")
+
+    route.load_input(file)
+
+    print("Done loading file...")
+
+    print("Loading pattern...")
+
+    route.load_output(pattern)
+
+    print("Done loading pattern....")
+
+    # Wait until we are done:
+
+    print("Waiting ...")
+
+    #await route.tasks[0]
+
+    #await asyncio.sleep(2)
+    await file.wait()
+
+    print("Done waiting!")
+
+    # Output contents:
+
+    for num, track in enumerate(pattern.container):
+
+        print("------ Track: {} ------".format(num))
+
+        print(track)
+
+        print("------ End of Track: {} -------".format(num))
+        print(track[-1].time)
+        print(track[-1].time / 1000)
+        print(track[-1].tick)
+        print(track[-1].track)
+
+    input()
+
+    # Play the track!
+
+    start = ytime()
+
+    pattern.container.start_playback()
+
+    print("Start playback!")
+
+    while pattern.container.playing:
+
+        # Get the event and output it:
+
+        event = await pattern.container.time_get()
+
+        print("Got event playing: {}".format(event))
+
+    elapsed = ytime() - start
+
+    print("Elapsed: {}".format(elapsed))
+    print("Elapsed (Seconds): {}".format(elapsed / 1000000))
+
 #midi_stream()
-asyncio.run(single_track())
+asyncio.run(test_route(), debug=True)

@@ -5,14 +5,15 @@ Components that house MIDI events and other misc. data,
 import asyncio
 
 from collections import defaultdict, UserList
-from operator import index
 from typing import Any
+from ymidi.errors import StopPlayback
 
 from ymidi.events.base import BaseEvent
+from ymidi.events.builtin import StartPattern, StopPattern
+from ymidi.events.meta import EndOfTrack
 from ymidi.handlers.maps import DEFAULT_TRACK_IN, DEFAULT_TRACK_OUT, DEFAULT_PATTERN_IN, DEFAULT_PATTERN_OUT, GLOBAL, TRACK
-from ymidi.handlers.track import global_tempo
 from ymidi.misc import de_to_ms, ms_to_de, bpm_to_mpb, mpb_to_bpm, ytime
-from ymidi.constants import TEMPO_SET
+from ymidi.constants import META, TEMPO_SET, TRACK_END
 
 
 class BaseContainer(UserList):
@@ -37,20 +38,21 @@ class BaseContainer(UserList):
     The output handlers are only used if this track is playing back events.
     These handlers should be a single function that takes two arguments,
     the container instance, and the event to be handled.
-    
+
     If you do not wish to load the default track handlers,
     then you can pass False to 'load_default_in' to not load in handlers,
     and 'load_default_out' to not load out handlers.
     """
 
-    def __init__(self, default_in: dict, default_out: dict, load_default_in: bool=True, load_default_out: bool=True) -> None:
+    def __init__(self, default_in: dict, default_out: dict, load_default_in: bool = True, load_default_out: bool = True) -> None:
 
         super().__init__()
 
         self.in_hands = defaultdict(list)
         self.out_hands = defaultdict(list)
 
-        self.index = 0  # Index we are on
+        self.out_index = 0  # Index we are on
+        self.in_index = 0   # In index we are on
         self.start_time = 0  # Start time
 
         # Check if we should load the default handlers:
@@ -72,100 +74,69 @@ class BaseContainer(UserList):
         Calling this function will tell the container
         that playback should be starting now,
         so extracting values from this container should begin soon!
-        Otherwise, the container will rapidally return events that were due in the past.
-        For example, if you wait 5 seconds to extarct events,
-        then events that occur before the 5 second mark will immediatly be
-        returned each time the 'get_time()' method is acalled, as the container will be attempting to catch up.
+        Otherwise, the container will rapidly return events that were due in the past.
+        For example, if you wait 5 seconds to extract events,
+        then events that occur before the 5 second mark will immediately be
+        returned each time the 'get_time()' method is called, as the container will be attempting to catch up.
 
         The implementation of this method will differ per each container.
         """
 
         raise NotImplementedError("Must be implemented in child class!")
 
-    def append(self, event: BaseEvent):
+    def submit_event(self, event: BaseEvent, index: int = None):
         """
-        Appends an event to this track.
+        Submits the given event to the container.
 
-        We do the exact same thing as conventional list objects,
-        except that we run the event through the event handlers.
+        This method will send the event though the in pattern handlers
+        bound to this object.
+        This means that events can be auto-sorted and managed(if the required pattern handlers are loaded), so you don't have to.
+        For example, events that are meant for a given track will be sorted
+        into their respective track(given that the valid builtin/meta events are present).
 
-        :param event: Event to append
+        Users can specify the index to insert the event in.
+        If this is not specified, then the event will be appended to the end of the list.
+
+        :param event: Event to add
         :type event: BaseEvent
         """
 
-        # Run thorugh the events:
+        if index is None:
 
-        print("in append")
+            index = len(self)
 
-        self._handle_event(event, len(self))
+        # Run the event though the handlers:
 
-        # Call the super method:
+        self._handle_event(event, index, self.in_hands)
 
-        return super().append(event)
-
-    def insert(self, i: int, item: Any):
-        """
-        Inserts the given event into the track.
-
-        We do the exact same thing as conventional list objects,
-        except that we run the event through the event handlers.
-
-        :param i: Index to insert at
-        :type i: int
-        :param item: Event to insert
-        :type item: Any
-        """
-
-        print("in insert")
-
-        self._handle_event(item, i)
-
-        # Call the super method
-
-        return super().insert(i, item)
-
-    def __setitem__(self, key: int, value: BaseEvent):
-        """
-        Sets the given event at a key.
-
-        We also call the relevant in handlers for this event.
-
-        :param key: Key of the value to set
-        :type key: int
-        :param value: Value to set
-        :type value: BaseEvent
-        """
-
-        # Run the event through the handlers:
-
-        print("IN set")
-        print("Key : {}".format(key))
-        print("Value: {}".format(value))
-
-        self._handle_event(value, index)
-
-        # Call the super method:
-
-        return super().__setitem__(key, value)
-
-    def _handle_event(self, event: Any, index: int):
+    def _handle_event(self, event: Any, index: int, collec: dict):
         """
         Handles the given event.
 
         We expect an event to process,
         and an index that the event will be kept at.
 
+        We also need a collection of track handlers to work with.
+
         :param event: Event to handle
         :type event: Any
         """
 
-        for hand in (self.in_hands[event.statusmsg] + self.in_hands[GLOBAL]):
+        key = event.statusmsg
 
-            print("Handling: {}".format(hand))
+        if event.statusmsg == META:
+
+            # Working with a meta event, set the key:
+
+            key = event.type
+
+        hands = set(collec[key] + collec[GLOBAL])
+
+        for hand in hands:
 
             if hand(self, event, index):
 
-                break
+                return
 
 
 class Pattern(BaseContainer):
@@ -188,29 +159,39 @@ class Pattern(BaseContainer):
 
     statusmsg = TRACK
 
-    def __init__(self, division: int=48, load_default_in: bool = True, load_default_out: bool = True) -> None:
+    def __init__(self, divisions: int = 48, load_default_in: bool = True, load_default_out: bool = True) -> None:
 
-        super().__init__(DEFAULT_PATTERN_IN, DEFAULT_PATTERN_OUT, load_default_in, load_default_out)
+        super().__init__(DEFAULT_PATTERN_IN, DEFAULT_PATTERN_OUT,
+                         load_default_in, load_default_out)
 
-        self._division = division
+        self._divisions = divisions
 
         self.num_tracks = 0  # Number of tracks we have registered
         self.track_index = 0  # Keeps track of the track we are on
-        self._format = 0  # Format of this pattern, should be 0, 1, 2
+        self.format = 0  # Format of this pattern, should be 0, 1, 2
+
+        self.playing_tracks = []  # List of playing tracks
+        self.playing = False  # Boolean determining if we are playing
+
+        self.started = False  # Value determining if we have returned StartPattern()
+        self.stopped = False  # Value determining if we have returned StopPattern()
+
+        self.start_pattern = None  # Start Pattern event representing the start of this pattern
+        self.stop_pattern = None  # Stop Pattern event representing the end of this pattern
 
     @property
-    def division(self) -> int:
+    def divisions(self) -> int:
         """
-        Gets the time division, which is the number of ticks per beat.
+        Gets the time divisions, which is the number of ticks per beat.
 
         :return: Microseconds per beat
         :rtype: int
         """
 
-        return self._division
+        return self._divisions
 
-    @division.setter
-    def division(self, value: int):
+    @divisions.setter
+    def divisions(self, value: int):
         """
         Sets the number of ticks per beat.
 
@@ -221,68 +202,36 @@ class Pattern(BaseContainer):
         :type value: int
         """
 
-        self._division = value
+        self._divisions = value
 
         for track in self:
 
-            track.divison = value
+            track.divisions = value
 
-    @property
-    def format(self) -> int:
+    def add_track(self):
         """
-        Returns the format of this pattern.
-
-        :return: Pattern format
-        :rtype: int
+        Creates a Track object and adds it to this collection.
         """
 
-        return self._format
+        track = Track()
 
-    @division.setter
-    def format(self, format: int):
-        """
-        Sets the format of the pattern.
+        # Run track handlers:
 
-        If we are format 0 or 1,
-        and we are loading default handlers,
-        then we also add the 'global_tempo' track handler.
+        for hand in self.in_hands[TRACK]:
 
-        :param format: New format of this pattern.
-        :type format: int
-        """
+            hand(self, track, self.num_tracks)
 
-        self._format = format
-
-        if self.load_default and self._format in (0,1):
-
-            # Add the 'global_tempo' handler:
-
-            self.in_hands[TEMPO_SET].append(global_tempo)
-
-    def submit_event(self, event: BaseEvent):
-        """
-        Submits the given event to the Pattern.
-
-        This method will send the event though the in pattern handlers
-        bound to this object.
-        This means that events can be auto-sorted and managed(if the required pattern handlers are loaded), so you don't have to.
-        For example, events that are meant for a given track will be sorted
-        into their respective track(given that the valid builtin/meta events are present).
-
-        :param event: Event to add
-        :type event: BaseEvent
-        """
-
-        # Run the event though the handlers:
-
-        for func in (self.in_hands[event.statusmsg] + self.in_hands[GLOBAL]):
-
-            func(self, event)
+        self.append(Track())
 
     def start_playback(self, index: int = 0, time: int = None):
         """
         Gets all attached tracks ready for playback.
         """
+
+        self.playing_tracks = self.data.copy()
+        self.playing = True
+
+        self.started = False
 
         for track in self:
 
@@ -304,9 +253,23 @@ class Pattern(BaseContainer):
 
         first_event, track = self._get_newest()
 
-        # Return our first event:
+        if track is None:
 
-        return self[track].get()
+            # Special event, return it:
+
+            return first_event
+
+        # Get our first event:
+
+        event = track.get()
+
+        # Handle the event:
+
+        self._handle_event(event, 0, self.out_hands)
+
+        # Return the event:
+
+        return event
 
     async def time_get(self) -> BaseEvent:
         """
@@ -329,9 +292,23 @@ class Pattern(BaseContainer):
 
         first_event, track = self._get_newest()
 
+        if track is None:
+
+            # Special event, return it:
+
+            return first_event
+
         # Run the time_get method:
-  
-        return await self[track].time_get()
+
+        event = await track.time_get()
+
+        # Handle the event:
+
+        self._handle_event(event, 0, self.out_hands)
+
+        # Return the event:
+
+        return event
 
     def _get_newest(self) -> BaseEvent:
         """
@@ -346,16 +323,69 @@ class Pattern(BaseContainer):
         # Get each event and compare the ticks:
 
         first_event = None
-        ticks = -1
+        ticks = None
+        track = None
 
-        for track, event in enumerate(self):
+        if not self.started:
 
-            if ticks < 0 or event.tick <= ticks:
+            # Return StartPattern():
+
+            self.started = True
+
+            return StartPattern(6, self.format, len(self), self._divisions), None
+
+        if self.stopped:
+
+            # We have stopped! Raise an exception:
+
+            raise StopPlayback()
+
+        for num, temp_track in enumerate(self.playing_tracks):
+
+            event = temp_track.current()
+
+            # print("Considering track: {}".format(num))
+            # print("With event: {}".format(event))
+            # print("With tick: {}".format(event.tick))
+            # print("With out index: {}".format(temp_track.out_index))
+
+            if ticks is None or event.tick <= ticks:
 
                 # Event comes sooner, log it:
 
+                # print("Got sooner event: {}".format(event))
+                # print("Event ticks: {}".format(event.tick))
+                # print("Current ticks: {}".format(ticks))
+
                 first_event = event
                 ticks = event.tick
+                track = temp_track
+
+        if len(self.playing_tracks) == 0:
+
+            # No more tracks!
+
+            # print("No more tracks! Done playing!")
+
+            self.playing = False
+
+            # Return StopPattern
+
+            return StopPattern(), None
+
+        if first_event.statusmsg == META and first_event.type == TRACK_END:
+
+            # This track is over, remove it from playing:
+
+            # print("Track over! Removing track : {}".format(self.playing_tracks.index(track)))
+
+            self.playing_tracks.remove(track)
+
+            # print("Playing length: {}".format(len(self.playing_tracks)))
+            # print("Total length: {}".format(len(self)))
+
+        # print("With out index: {}".format(track.out_index))
+        # print("With event: {}".format(first_event))
 
         return first_event, track
 
@@ -371,21 +401,26 @@ class Track(BaseContainer):
     so we support all list operations.
     """
 
-    def __init__(self, load_default_in: bool=True, load_default_out: bool=True):
+    def __init__(self, load_default_in: bool = True, load_default_out: bool = True):
 
-        super().__init__(DEFAULT_TRACK_IN, DEFAULT_TRACK_OUT, load_default_in=load_default_in, load_default_out=load_default_out)
+        super().__init__(DEFAULT_TRACK_IN, DEFAULT_TRACK_OUT,
+                         load_default_in=load_default_in, load_default_out=load_default_out)
 
         self.name = ''  # Name of the track
         self._tempo = 120  # Tempo in Beats Per Minute
         self.instrument = ''  # Name of the instrument for this track
 
+        self.interval = 50 / 1000
+        self.lookahead = 75 * 1000
+
         self.index = 0  # Index we are on
         self.start_time = 0  # Time we have started on, we use the ymidi timer for this
         self.last_time = 0  # Time of the last event
         self.timesig_num = 4  # Numerator of the time signature
-        self.timesig_den  = 4  # Denominator of the time signature
-        self._mpb = bpm_to_mpb(self.tempo, denom=self.timesig_den)  # number of microseconds per beat
-        self.division = 48  # Division of this track
+        self.timesig_den = 4  # Denominator of the time signature
+        # number of microseconds per beat
+        self._mpb = bpm_to_mpb(self.tempo, denom=self.timesig_den)
+        self.divisions = 48  # divisions of this track
 
     @property
     def tempo(self) -> int:
@@ -436,7 +471,7 @@ class Track(BaseContainer):
         self._mpb = mpb
         self._tempo = mpb_to_bpm(mpb, self.timesig_den)
 
-    def start_playback(self, index: int=0, time:int = None):
+    def start_playback(self, index: int = 0, time: int = None):
         """
         Prepares this container for playback.
 
@@ -445,12 +480,12 @@ class Track(BaseContainer):
         You can also manually specify the index and time values to be set.
 
         After this function is called,
-        users should start extracting values from the collection immediatly!
+        users should start extracting values from the collection immediately!
         """
 
         # Set the index:
 
-        self.index = index
+        self.out_index = index
 
         # Set the start time:
 
@@ -487,6 +522,18 @@ class Track(BaseContainer):
 
             self._handle_event(event, index)
 
+    def current(self) -> BaseEvent:
+        """
+        Gets the current event in the track.
+
+        This is determined by using the 'out_id' parameter.
+
+        :return: Current event ready to leave the track
+        :rtype: BaseEvent
+        """
+
+        return self[self.out_index]
+
     def get(self) -> BaseEvent:
         """
         Gets the next event from the container.
@@ -499,17 +546,15 @@ class Track(BaseContainer):
 
         # Get the event:
 
-        event = self[self.index]
+        event = self[self.out_index]
 
         # Run the event though the handlers:
 
-        for func in (self.out_hands[event.statusmsg] + self.out_hands[GLOBAL]):
-
-            func(self, event, self.index)
+        self._handle_event(event, self.out_index, self.out_hands)
 
         # Increment the index:
 
-        self.index += 1
+        self.out_index += 1
 
         # Finally, return the event:
 
@@ -520,13 +565,14 @@ class Track(BaseContainer):
         Gets an event from the track,
         but does not do so until it is time for the event to be returned.
 
-        This may seem simular to 'wait_get()',
-        except that we use the absolue time of the event.
-        For example, if you called this function after waiting 3 seconds,
-        then the three seconds will be subtracted from the current event's delta time.
-        This is useful if you canceled the 'wait_get()' method,
-        or if will not be calling this event at the exact start of the delta wait time
-        (This is what the Pattern class does!).
+        This method uses a special method of time keeping to ensure that playback is accurate.
+        We utilize a lookahead method of time keeping,
+        meaning that if the event time falls within the lookahead,
+        then it is returned.
+        This lookahead, and the wait interval,
+        can be configured as you see fit.
+        TODO: Big ticket item, configure a benchmark or profiling system
+        that can determine the most optimal values for this.
 
         This method requires the 'start_playback()' method to be called,
         otherwise playback may not be accurate.
@@ -537,65 +583,31 @@ class Track(BaseContainer):
 
         # Determine the wait time:
 
-        event = self[self.index]
+        event = self[self.out_index]
 
-        time_sleep = ((de_to_ms(event.delta, self.division, self._mpb) + self.last_time) - ytime()) - 1000
+        time_done = self.last_time + de_to_ms(event.delta, self.divisions, self._mpb)
 
-        print("Sleeping for: {}".format(time_sleep))
-        print("Seconds: {}".format(time_sleep / 1000000))
-        print("Time delta seconds: {}".format(event.delta_time / 1000000))
+        while True:
 
-        # Wait for a given time:
+            # Get current time:
 
-        if time_sleep > 0:
+            current_time = ytime() + self.lookahead
 
-            await asyncio.sleep(time_sleep / 1000000)
+            # Check if we are good to return:
+
+            if time_done < current_time:
+
+                # We are done!
+
+                break
+
+            # Sleep for a given time:
+
+            await asyncio.sleep(self.interval)
 
         # Set the last time:
 
         self.last_time = ytime()
-
-        # Return the event:
-
-        return self.get()
-
-    async def wait_get(self) -> BaseEvent:
-        """
-        Gets an event from the track,
-        but waits the entire delta time before the event is returned.
-
-        This allows you to wait the whole delay of an event before recieveing it.
-        We calculate the time to wait based upon the division of the track,
-        the current tempo of the track, and the delta time of the event.
-
-        This function should be awaited.
-        We use asyncio methods to wait asynchronously.
-        To ensure that playback is accurate,
-        it is recommended to use the default container handlers,
-        as they will alter the state of this container based upon the events we encounter.
-        For example, if we encounter a SetTempo event, then we will change the tempo of this container.
-        If this handler is not present, then the tempo will not change.
-
-        :return: Next event in the container
-        :rtype: BaseEvent
-        """
-
-        # Get the event to process:
-
-        event = self[self.index]
-
-        # Determine the time to sleep:
-
-        time_sleep = de_to_ms(event.delta, self.division, self._mpb)
-        print("Sleeping for: {}".format(time_sleep))
-        print("Seconds: {}".format(time_sleep / 1000000))
-        print("Time delta seconds: {}".format(event.delta_time / 1000000))
-
-        # Wait for a given time:
-
-        if time_sleep > 0: 
-
-            await asyncio.sleep(time_sleep / 1000000)
 
         # Return the event:
 

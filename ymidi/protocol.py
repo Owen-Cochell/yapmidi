@@ -91,7 +91,7 @@ class BaseProtocol(object):
         This object should do startup stuff here
         that prepares it for use.
         """
-        
+
         pass
 
     def stop(self):
@@ -125,7 +125,7 @@ class BaseProtocol(object):
         :rtype: bytes
         """
 
-        return self.sync_read(1)
+        return self.sync_read(1)[0]
 
 
 class FileProtocol(BaseProtocol):
@@ -147,7 +147,7 @@ class FileProtocol(BaseProtocol):
         super().__init__()
 
         self.path = path  # Path to the file to read
-        self.opener = open(path, ("b" if write else "r") + extra)
+        self.opener = open(path, ("w" if write else "r") + extra)
         self.loop = asyncio.get_event_loop()
 
     async def read(self, byts: int) -> bytes:
