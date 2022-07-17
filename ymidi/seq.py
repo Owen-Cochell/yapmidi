@@ -7,8 +7,8 @@ as well as handlers that can be used in this class.
 """
 
 import asyncio
-from ymidi.events.base import BaseEvent
 
+from ymidi.events.base import BaseEvent
 from ymidi.handlers.base import HandlerCollection
 from ymidi.io.base import IOCollection
 
@@ -56,6 +56,15 @@ class YMSequencer(HandlerCollection):
     which allows events to be altered depending upon where it is going.
 
     We synchronize the asyncio event loop across all components.
+
+    TODO: A lot of stuff ...
+    Add special methods for attaching IO modules to the sequencer.
+    Create method for loading decorated functions as event handlers.
+    Separate meta handlers for event handling and output IO modules.
+    Make special mappings to map certain meta handlers to certain output IO modules?
+    Have a 'global' meta handler section that is working with ALL events,
+    regardless of where they are going?
+    Make this all modular and configurable...
     """
 
     def __init__(self) -> None:
@@ -99,6 +108,28 @@ class YMSequencer(HandlerCollection):
         """
 
         return self.output
+
+    async def stop(self):
+        """
+        Stops the sequencer.
+
+        This method stops ALL IO modules,
+        and clears our wait condition.
+
+        Any code waiting for this Sequencer to be complete
+        will then be released.
+        """
+
+        # First off, call out super start method:
+
+        super().stop()
+
+        # Next, stop all IO modules:
+
+        self.input.stop()
+        self.output.stop()
+
+        # Finally, clear our wait condition:
 
     async def run(self):
         """

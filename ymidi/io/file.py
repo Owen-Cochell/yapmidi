@@ -8,7 +8,7 @@ import asyncio
 import struct
 
 from ymidi.io.base import BaseIO
-from ymidi.protocol import BaseProtocol, FileProtocol
+from ymidi.protocol import BaseProtocol, BlockingFileProtocol
 from ymidi.decoder import MetaDecoder
 from ymidi.events.base import BaseEvent
 from ymidi.events.meta import EndOfTrack
@@ -51,6 +51,8 @@ class MIDIFile(BaseIO):
     object that reads data from anywhere.
     Most people will want to read content from a file,
     so by default we will create a FileProtocol object.
+    TODO: Figure out the best protocol object to use!
+    We use BlockingFileProtocol for now, but there may be some better solutions...
     """
 
     NAME = "MIDIFile"
@@ -63,7 +65,7 @@ class MIDIFile(BaseIO):
 
             # Crete a file protocol object:
 
-            proto = FileProtocol(path)
+            proto = BlockingFileProtocol(path)
 
         super().__init__(proto, MetaDecoder(), name=name)
 
@@ -319,10 +321,10 @@ class MIDIFile(BaseIO):
 
         return StartPattern(length, format, self.num_tracks, division)
 
-    async def read_event(self) -> BaseEvent:
+    async def read_event_old(self) -> BaseEvent:
         """
         Reads the next event in the file.
-        
+
         This method is usually called automatically where necessary,
         but the user can run this manually to get events.
 
@@ -333,8 +335,6 @@ class MIDIFile(BaseIO):
         # Read the delta time:
 
         delta, read = self.decoder.read_varlen(self.proto)
-
-        print("Delta time: {} ; Items read: {}".format(delta, read))
 
         res = None
         blah = []
@@ -358,21 +358,17 @@ class MIDIFile(BaseIO):
 
         # Finally, return the MIDI event:
 
-        print("Processed event: {}".format(res))
-
         dumm = []
 
         for val in blah:
 
             dumm.append(val[0])
 
-        print("All processed data: {}".format(dumm))
-
         input()
 
         return res
 
-    async def read_event_new(self) -> BaseEvent:
+    async def read_event(self) -> BaseEvent:
         """
         Reads the next event in the file.
 
@@ -386,11 +382,7 @@ class MIDIFile(BaseIO):
 
         # Read the delta time:
 
-        print("Getting delta:")
-
-        delta, read = self.decoder.read_varlen(self.proto)
-
-        print("Delta time: {}".format(delta))
+        delta, _ = self.decoder.read_varlen(self.proto)
 
         res = None
         data = None
@@ -413,20 +405,9 @@ class MIDIFile(BaseIO):
 
             # Read all bytes:
 
-            print("In meta read")
-
-            print(status)
-            print(type(status))
-            print(meta_type)
-            print(type(meta_type))
-            print(write_varlen(length))
-            print(type(write_varlen(length)))
-
             data = status + meta_type + write_varlen(length) + await self.proto.read(length)
 
         else:
-
-            print("Not a meta event ...")
 
             # Determine if this is a status message:
 
@@ -436,15 +417,11 @@ class MIDIFile(BaseIO):
             if self.decoder.is_data(status[0]):
 
                 # Use running status ...
-
-                print("Using running status")
-                print("Got data: {}".format(status))
  
                 temp = status
 
                 status = bytes([self.decoder.get_running()])
-
-            print(status)
+                offset = 1
 
             # Get the length of the event:
 
@@ -453,18 +430,6 @@ class MIDIFile(BaseIO):
             # Read the specified amount:
 
             data = status + temp + await self.proto.read(length - offset)
-
-        print(data)
-        print(type(data))
-
-        blah = bytes(data)
-
-        print(blah)
-        print(type(blah))
-
-        print(list(blah))
-
-        input()
 
         res = self.decoder.decode(data)
 

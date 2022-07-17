@@ -18,6 +18,8 @@ from ymidi.containers import Track, Pattern
 from ymidi.io.base import RouteIO
 from ymidi.io.container import ContainerIO
 from ymidi.misc import ytime
+from ymidi.protocol import BlockingFileProtocol
+from ymidi.seq import YMSequencer
 
 
 def midi_stream():
@@ -256,6 +258,11 @@ async def test_route():
 
     pattern = ContainerIO()
     file = MIDIFile(path='majicalljarr.mid')
+
+    # Set the protocol:
+
+    file.proto = BlockingFileProtocol('majicalljarr.mid')
+
     route = RouteIO()
 
     # Connect the modules together:
@@ -319,6 +326,44 @@ async def test_route():
 
     print("Elapsed: {}".format(elapsed))
     print("Elapsed (Seconds): {}".format(elapsed / 1000000))
+
+
+async def test_seq():
+    """
+    The big shabang - Test out the sequencer class!
+    """
+
+    # Sequencer object to test:
+
+    seq = YMSequencer()
+
+    # Create a FileIO class for input:
+
+    file = MIDIFile(path='majicalljarr.mid')
+
+    # Register the callbacks:
+
+    @seq.callback(NoteOn.statusmsg)
+    async def handler_on(hand, event):
+        print("Got note on: {}".format(event))
+
+    @seq.callback(NoteOff.statusmsg)
+    async def handler_off(hand, event):
+        print("Got note off: {}".format(event))
+
+    # Create a ContainerIO class for output:
+
+    pattern = ContainerIO()
+
+    # Attach both IO modules:
+
+    seq.input.load_module(file)
+
+    seq.output.load_module(pattern)
+
+    # We should wait here or something ...
+
+
 
 #midi_stream()
 asyncio.run(test_route(), debug=True)

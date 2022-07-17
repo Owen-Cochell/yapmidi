@@ -140,6 +140,8 @@ class FileProtocol(BaseProtocol):
 
     By default, we read and write all data as bytes.
     Users can define a custom mode if they so choose.
+
+    TODO: Figure this out, threading overhead is insane, maybe default to BLockingFileProtocol?
     """
 
     def __init__(self, path: str, write: bool=False, extra: str='b') -> None:
@@ -209,5 +211,54 @@ class FileProtocol(BaseProtocol):
         """
 
         # Write to file and return:
+
+        return self.opener.write(byts)
+
+
+class BlockingFileProtocol(FileProtocol):
+    """
+    BlockingFileProtocol - Reads data from a file on the operating system.
+
+    We are identical to the FileProtocol,
+    except that we don't use threads to emulate asynchronous behavior.
+    This object will block the event loop while reading/writing.
+
+    This means that the event loop will be unable to
+    process other tasks while this object is active.
+    However, this object is *much* faster than FileProtocol,
+    as it doesn't use threads.
+    """
+
+    async def read(self, byts: int) -> bytes:
+        """
+        Reads the given number of bytes from the file.
+
+        If the file is not opened in read mode,
+        then an exception will be raised.
+
+        We return the bytes read from the file.
+
+        :param byts: Number of bytes to read
+        :type byts: int
+        :return: Bytes read from the file.
+        :rtype: bytes
+        """
+
+        return self.opener.read(byts)
+
+    async def write(self, byts: int) -> int:
+        """
+        Writes the given bytes to a file.
+
+        If this file is not opened in write mode,
+        then an exception will be raised.
+
+        We return the number of bytes written.
+
+        :param byts: Bytes to write
+        :type byts: int
+        :return: Number of bytes written
+        :rtype: int
+        """
 
         return self.opener.write(byts)

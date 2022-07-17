@@ -331,10 +331,6 @@ class ModularDecoder(BaseDecoder):
         :rtype: BaseEvent
         """
 
-        print(type(bts))
-        print(bts)
-        print(bts[0])
-
         # Determine if we are working with a new event:
 
         if self.is_status(bts[0]):
@@ -357,8 +353,6 @@ class ModularDecoder(BaseDecoder):
 
             # Add status message to the start of data:
 
-            print("Unknown event!")
-
             val.insert(0, self.decode_status[0])
 
         # Are we a variable length event?
@@ -374,9 +368,6 @@ class ModularDecoder(BaseDecoder):
             val.pop(-1)
 
         # Create the event:
-
-        print("Creating event: {}".format(event))
-        print("Data: {}".format(val))
 
         final = event(*val)
 
@@ -452,13 +443,9 @@ class ModularDecoder(BaseDecoder):
 
                 self.data.insert(0, [bts])
 
-                print("Current data: {}".format(self.data))
-
             else:
 
                 self.data[0].append(bts)
-
-                print("Current data: {}".format(self.data))
 
         # Check if the data is ready to return:
 
@@ -652,18 +639,11 @@ class MetaDecoder(ModularDecoder):
 
         # Check if the first byte is a valid status message
 
-        print("In meta_decode")
-
-        print(bts)
-        print(type(bts))
-
         status = bts[0]
 
         if status not in (META, SYSTEM_EXCLUSIVE, EOX):
 
             # Not a meta event, pass it along:
-
-            print("Passing along...")
 
             return super().decode(bts)
 
@@ -681,15 +661,7 @@ class MetaDecoder(ModularDecoder):
 
         # Check the length of the event:
 
-        print("BEFORE varlen decoding: {}".format(bts))
-        print(bts[2:])
-
         length, num_read = self.read_varlen(bts[2:])
-
-        print("Expected lengths:")
-
-        print(length)
-        print(num_read)
 
         # Check if our length is valid
 
@@ -704,10 +676,6 @@ class MetaDecoder(ModularDecoder):
             # Add status message to the front:
 
             final = bytes(bts[0]) + bytes(bts[1]) + final
-
-        print("Creating event: {}".format(event))
-
-        print(bts)
 
         return event(*final)
 
@@ -779,9 +747,6 @@ class MetaDecoder(ModularDecoder):
             if len(self.meta_byts) == self.meta_length:
   
                 # We are done! Create the object and reset:
-
-                print("Creating event: {}".format(self.meta_collection[self.meta_type]))
-                print("Data: {}".format(self.meta_byts))
 
                 event = self.meta_collection[self.meta_type]
 
@@ -864,9 +829,6 @@ class MetaDecoder(ModularDecoder):
         """
 
         for byte in source:
-
-            print("Varlen: {}".format(byte))
-            print(type(byte))
 
             self.var_final = (self.var_final << 7) | (byte & 0x7f)
 

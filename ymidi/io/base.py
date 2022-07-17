@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import asyncio
 from typing import Tuple
-from ymidi.constants import START_PATTERN
 
 from ymidi.protocol import BaseProtocol
 from ymidi.decoder import BaseDecoder

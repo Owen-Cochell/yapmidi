@@ -635,19 +635,28 @@ class ModuleCollection(object):
         Method used to stop this ModuleCollection.
 
         We set our running status,
-        as well as cancel the run() coroutine.
+        and stop all started modules.
 
         Again, this method is designed to be ran from asynchronous code,
         usually the TODO: Put masterclass name here
         will invoke this method.
 
         Sub-classes should put stop code here to end their relevant components.
-        This usually involves stopping all loaded modules.
         """
 
         # Set our running status:
 
         self.running = False
+
+        for mod in self.modules:
+
+            # Determine if this module needs stopping:
+
+            if mod.running:
+
+                # Stop the module:
+
+                await self.stop_module(mod)
 
     async def run_module(self, module: BaseModule):
         """
